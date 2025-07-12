@@ -1,0 +1,27 @@
+{
+  "name": "line-bot-upload",
+  "version": "1.0.0",
+  "main": "index_upload.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@line/bot-sdk": "^7.4.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "isomorphic-fetch": "^3.0.0",
+    "pdfkit": "^0.17.1",
+    "querystring": "^0.2.1",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "globals": "^16.2.0"
+  }
+}

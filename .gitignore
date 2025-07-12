@@ -1,0 +1,16 @@
+# 機密情報
+.env
+
+# ライブラリ類（再構築できるからGitで管理しない）
+node_modules/
+
+# ログファイル
+*.log
+
+# OSの一時ファイル
+.DS_Store
+Thumbs.db
+
+# バックアップ・圧縮ファイル
+*.zip
+backup/

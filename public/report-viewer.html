@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>帳票ビューア</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1em;
+      text-align: center;
+    }
+    a.download-link {
+      display: inline-block;
+      margin-top: 2em;
+      padding: 1em 2em;
+      background: #06c755;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>📄 帳票を開く</h1>
+  <p>以下のボタンから帳票を開いてください：</p>
+  <a id="openLink" class="download-link" href="#" target="_blank">▶ 帳票を表示</a>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    window.onload = async function () {
+      await liff.init({ liffId: "2007688662-pAbmBl6r" });
+
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+
+      // クエリパラメータからPDF URLを取得
+      const params = new URLSearchParams(window.location.search);
+      const pdfUrl = params.get("pdf");
+
+      if (!pdfUrl) {
+        document.body.innerHTML += "<p>⚠️ PDFのURLが指定されていません。</p>";
+        return;
+      }
+
+      // PDFを表示（iframeで表示）
+      const iframe = document.createElement("iframe");
+      iframe.src = pdfUrl;
+      iframe.style.width = "100%";
+      iframe.style.height = "90vh";
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
+    };
+  </script>
+
+</body>
+
+</html>
