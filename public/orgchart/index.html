@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>部署ツリーと社員一覧</title>
+  <style>
+    body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; }
+    #tree { width: 40%; overflow-y: auto; border-right: 1px solid #ccc; padding: 1rem; }
+    #employee-list { flex-grow: 1; padding: 1rem; overflow-y: auto; }
+    ul { list-style: none; padding-left: 1rem; }
+    li { cursor: pointer; }
+    li:hover { background-color: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div id="tree"><h2>部署ツリー</h2></div>
+  <div id="employee-list"><h2>社員一覧</h2><p>部署をクリックしてください</p></div>
+
+  <script>
+    let departments = [];
+    let employees = [];
+
+    // ツリーを再帰的に構築
+    function buildTree(parentId) {
+      const children = departments.filter(d => d.parent_department_id === parentId);
+      if (children.length === 0) return null;
+
+      const ul = document.createElement('ul');
+      for (const child of children) {
+        const li = document.createElement('li');
+        li.textContent = child.department_name;
+        li.onclick = () => showEmployees(child.department_full_name);
+        const subtree = buildTree(child.department_id);
+        if (subtree) li.appendChild(subtree);
+        ul.appendChild(li);
+      }
+      return ul;
+    }
+
+    function showEmployees(deptFullName) {
+      const list = document.getElementById('employee-list');
+      list.innerHTML = `<h2>${deptFullName}の社員一覧</h2>`;
+      const filtered = employees.filter(e => e.department_full_name === deptFullName);
+      if (filtered.length === 0) {
+        list.innerHTML += '<p>該当する社員がいません</p>';
+      } else {
+        const ul = document.createElement('ul');
+        for (const emp of filtered) {
+          const li = document.createElement('li');
+          li.textContent = `${emp.氏名}（${emp.position_name || '役職不明'}）`;
+          ul.appendChild(li);
+        }
+        list.appendChild(ul);
+      }
+    }
+
+    // 初期化処理
+    async function init() {
+      const [deptRes, empRes] = await Promise.all([
+        fetch('/api/orgchart/departments'),
+        fetch('/api/orgchart/employees')
+      ]);
+      departments = await deptRes.json();
+      employees = await empRes.json();
+
+      const treeRoot = buildTree(null);
+      if (treeRoot) {
+        document.getElementById('tree').appendChild(treeRoot);
+      } else {
+        document.getElementById('tree').innerHTML += '<p>部署データがありません</p>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

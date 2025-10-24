@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>有休・欠勤・遅刻・早退・外出 申請フォーム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <!-- Flatpickr 本体 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+  <!-- 日本語化（必要なら） -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1em;
+      background: #f8f8f8;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    label {
+      display: block;
+      margin-top: 1em;
+      font-weight: bold;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.5em;
+      font-size: 1em;
+      margin-top: 0.3em;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 2em;
+      width: 100%;
+      padding: 0.8em;
+      background-color: #06c755;
+      color: white;
+      font-size: 1.2em;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .approver-section {
+      margin-top: 1em;
+      padding: 1em;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 4px rgba(0, 0, 0, .1);
+    }
+
+    .user-summary {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: #fff;
+
+      /* デザイン演出（オプション） */
+      backdrop-filter: blur(3px);
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #06c755;
+      border-radius: 10px;
+      padding: .8em 1em;
+      color: #333;
+    }
+
+    .user-summary .label {
+      display: inline-block;
+      width: 4em;
+      font-weight: 700;
+      color: #555;
+      vertical-align: middle;
+    }
+
+    #user-name {
+      font-size: 1.2em;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      inset: 0;
+      background: rgba(0, 0, 0, .5);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #fff;
+      width: min(90vw, 360px);
+      border-radius: 12px;
+      padding: 1.2em 1.2em 1em;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .2);
+    }
+
+    .modal-title {
+      margin: 0 0 .6em;
+      font-size: 1.1em;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .modal-text {
+      white-space: pre-line;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: .6em;
+      margin-top: 1em;
+    }
+
+    .modal-buttons button {
+      flex: 1;
+      padding: .6em 1em;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-yes {
+      background: #06c755;
+      color: #fff;
+    }
+
+    .btn-no {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    #debug {
+      white-space: pre-line;
+      color: crimson;
+      font-size: .9em;
+      margin-top: 2em;
+    }
+
+    #daysContainer {
+      margin: 1rem 0;
+      padding: .9rem 1.1rem;
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .6rem;
+      border: 2px solid #06c75522;
+    }
+
+    #daysLabel {
+      font-weight: 700;
+      color: #333;
+      letter-spacing: .02em;
+    }
+
+    #days {
+      display: inline-block;
+      min-width: 3.2em;
+      text-align: center;
+      font-weight: 900;
+      font-size: 1.8rem;
+      line-height: 1.2;
+      padding: .2rem .6rem;
+      border-radius: 8px;
+      /* 親要素は色指定しないほうがいい */
+      color: inherit;
+    }
+
+    #daysUnit {
+      color: #555;
+      font-weight: 700;
+    }
+
+    #daysValue {
+      display: inline-block !important;
+      visibility: visible !important;
+      color: #000 !important;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+
+    #daysValue.pulse {
+      display: inline-block;
+      animation: pop 400ms ease;
+    }
+
+    @keyframes pop {
+      0% {
+        transform: scale(1);
+      }
+
+      40% {
+        transform: scale(1.3);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    #hoursContainer {
+      margin: 1rem 0;
+      padding: .9rem 1.1rem;
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .6rem;
+      border: 2px solid #06c75522;
+    }
+
+    #hoursLabel {
+      font-weight: 700;
+      color: #333;
+      letter-spacing: .02em;
+    }
+
+    #hours {
+      display: inline-block;
+      min-width: 3.2em;
+      text-align: center;
+      font-weight: 900;
+      font-size: 1.8rem;
+      line-height: 1.2;
+      padding: .2rem .6rem;
+      border-radius: 8px;
+      color: inherit;
+    }
+
+    #hoursUnit {
+      color: #555;
+      font-weight: 700;
+    }
+
+    #hoursValue {
+      display: inline-block;
+    }
+
+    #hoursValue.pulse {
+      animation: pop 400ms ease;
+    }
+
+    /* セレクトを1行に収めて省略表示（必要なら） */
+    .approver-section select {
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="confirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-content">
+      <h2 id="confirmTitle" class="modal-title">確認</h2>
+      <p id="confirmText" class="modal-text"></p>
+      <div class="modal-buttons">
+        <button type="button" class="btn-no" id="modalNo">いいえ</button>
+        <button type="button" class="btn-yes" id="modalYes">はい</button>
+      </div>
+    </div>
+  </div>
+
+  <h1>📄 有休・欠勤・遅刻<br />早退・外出 申請</h1>
+
+  <div id="link-section" style="display:none">
+    <label for="department_select">所属部署を選んでください</label>
+    <select id="department_select">
+      <option value="">-- 部署を選択 --</option>
+    </select>
+
+    <label for="user_select">あなたのお名前を選んでください</label>
+    <select id="user_select" disabled>
+      <option value="">-- 氏名を選択 --</option>
+    </select>
+
+    <button id="doLink" disabled>登録する</button>
+    <p style="font-size:.9em;color:#666;margin-top:.5em;">※ 初回のみ必要です。以降は自動的に本人を特定します。</p>
+  </div>
+
+  <div id="form-section" style="display:none">
+    <div class="user-summary" id="userSummary" aria-live="polite">
+      <div><span class="label">所属</span><span id="user-dept">-</span></div>
+      <div><span class="label">氏名</span><span id="user-name">-</span></div>
+    </div>
+
+    <label for="leave_type">申請種別</label>
+    <select id="leave_type" required>
+      <option value="full_day">全日休</option>
+      <option value="first_half">前半休</option>
+      <option value="second_half">後半休</option>
+      <option value="special_leave">特別休</option>
+      <option value="absence">欠勤</option>
+      <option value="late">遅刻</option>
+      <option value="leave_early">早退</option>
+      <option value="outing">外出</option>
+    </select>
+
+    <label for="start_date">開始日</label>
+    <input type="date" id="start_date" required />
+
+    <label for="end_date">終了日 <small style="color:#666;">（空なら開始日と同じ）</small></label>
+    <input type="date" id="end_date" />
+    <div id="daysContainer">
+      <span id="daysLabel">取得日数</span>：
+      <span id="days"><span id="daysValue">-</span></span>
+      <span id="daysUnit">日</span>
+    </div>
+    <style>
+      #time_section {
+        visibility: hidden;
+        height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: all 0.3s ease;
+      }
+
+      #time_section.visible {
+        visibility: visible;
+        height: auto;
+        opacity: 1;
+      }
+    </style>
+
+    <div class="time-group" id="time_section">
+      <label for="start_time">開始時刻</label>
+      <input type="text" id="start_time">
+
+      <label for="end_time">終了時刻</label>
+      <input type="text" id="end_time">
+    </div>
+    <div id="hoursContainer" style="display: none;">
+      <span id="hoursLabel">取得時間</span>：
+      <span id="hours"><span id="hoursValue">-</span></span>
+    </div>
+    <label for="reason">申請理由（任意）</label>
+    <textarea id="reason" rows="4" placeholder="例：通院のため 10:00〜11:30"></textarea>
+
+    <div class="approver-section">
+      <label for="approver_user_id">申請先（承認者）</label>
+      <select id="approver_user_id" required>
+        <option value="">読み込み中...</option>
+      </select>
+    </div>
+
+    <button id="btnSubmit" type="button">📨 申請する</button>
+    <button id="btnReset" type="button" style="margin-top:1em;background:#e0e0e0;color:#333;">リセット</button>
+    <button id="btnDeleteLink" type="button" style="margin-top:1em;background:#ef4444;color:#fff;">申請者名の再登録</button>
+  </div>
+
+  <div id="debug"></div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const debugLog = (msg) => {
+      let el = document.getElementById('debug');
+      if (!el) {
+        el = document.createElement('pre');
+        el.id = 'debug';
+        el.style = "font-size: 0.9em; color: gray; background: #f0f0f0; max-height: 200px; overflow-y: auto;";
+        document.body.appendChild(el);
+      }
+      el.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+    };
+    const show = (id, v = true) => { const el = document.getElementById(id); if (el) el.style.display = v ? 'block' : 'none'; };
+
+    function showLink() { show('form-section', false); show('link-section', true); window.__mode = 'link'; }
+    function showForm() { show('link-section', false); show('form-section', true); window.__mode = 'form'; }
+
+    async function fetchSafe(url, options = {}, timeoutMs = 10000) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...options, signal: ctrl.signal });
+        return res;
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    function debugDaysParams(stage) {
+      const s = document.getElementById('start_date');
+      const e = document.getElementById('end_date');
+      const lt = document.getElementById('leave_type');
+      const dbg = document.getElementById('debug');
+      if (!dbg) return;
+
+      dbg.textContent += `[${stage}] start=${s.value}, end=${e.value}, leave_type=${lt?.value}\n`;
+    }
+
+    function setupFormInteractions() {
+      const leaveType = document.getElementById('leave_type');
+      const s = document.getElementById('start_date');
+      const e = document.getElementById('end_date');
+
+      // ここがポイント：数字そのもの(#daysValue)を直接いじる
+      const daysValue = document.getElementById('daysValue');
+      const daysWrap = document.getElementById('days');          // 親の枠
+      const wrap = document.getElementById('daysContainer'); // ボックス全体
+
+      const showDays = () =>
+        (leaveType.value === 'full_day' || leaveType.value === 'absence' || leaveType.value === 'special_leave');
+      const updateVis = () => {
+        const vis = showDays();
+        wrap.style.display = vis ? 'block' : 'none';
+        if (!vis) {
+          e.value = '';
+          daysValue.textContent = '-';
+        }
+      };
+
+      // 開始日に入れたら、終了日が空なら同じ日に自動コピー
+      s.addEventListener('change', () => {
+        if (!e.value) e.value = s.value;
+        if (e.value && s.value && s.value > e.value) e.value = s.value;
+        fetchDays();
+      });
+      e.addEventListener('change', () => {
+        if (e.value && s.value && s.value > e.value) e.value = s.value;
+        fetchDays();
+      });
+      leaveType.addEventListener('change', () => { updateVis(); updateTimeInputs(); fetchDays(); });
+
+      // replaceAll を使わないで YYYYMMDD 化
+      const toYYYYMMDD = (v) => (v || '').split('-').join('');
+
+      async function fetchDays() {
+        if (!showDays()) {
+          return;
+        }
+
+        const sv = s.value;
+        const ev = e.value || s.value;
+
+        if (!sv) {
+          daysValue.textContent = '-';
+          return;
+        }
+
+        const startStr = toYYYYMMDD(sv);
+        const endStr = toYYYYMMDD(ev);
+
+        try {
+          const r = await fetch(`/api/workdays?start=${startStr}&end=${endStr}`);
+          const raw = await r.text();
+          const d = raw ? JSON.parse(raw) : {};
+          const value = (d && typeof d.days !== 'undefined') ? d.days : '-';
+          daysValue.textContent = value;
+
+          // アニメ再適用
+          daysValue.classList.remove('pulse');
+          void daysValue.offsetWidth;
+          setTimeout(() => {
+            daysValue.classList.add('pulse');
+          }, 50);
+        } catch (err) {
+          daysValue.textContent = '-';
+          const dbg = document.getElementById('debug');
+          if (dbg) dbg.textContent += `days err: ${err.message}\n`;
+        }
+      }
+
+      const resetBtn = document.getElementById('btnReset');
+      resetBtn.addEventListener('click', () => {
+        // 💥 1. 各入力値をクリア
+        leaveType.value = 'full_day';
+        s.value = '';
+        e.value = '';
+        document.getElementById('reason').value = '';
+        document.getElementById('approver_user_id').selectedIndex = 0;
+
+        // 💥 2. `#daysValue` を直接操作（DOM差し替えしない）
+        const dv = document.getElementById('daysValue');
+        if (dv) {
+          dv.textContent = '-';
+          dv.classList.remove('pulse');
+          void dv.offsetWidth; // 強制再描画でアニメ適用できるようにする
+          dv.classList.add('pulse');
+        }
+
+        // 💥 3. 表示状態や取得日数の再評価
+        updateVis();
+        fetchDays();
+      });
+
+      // 初期反映
+      updateVis();
+      fetchDays();
+    }
+
+    function updateTimeInputs() {
+      const leaveType = document.getElementById('leave_type').value;
+      const needTime = ['leave_early', 'outing', 'late'].includes(leaveType);
+      const hideEndDate = ['first_half', 'second_half', 'late', 'leave_early', 'outing'].includes(leaveType);
+
+      // 時間セクション表示切替
+      const timeSection = document.getElementById('time_section');
+      if (needTime) {
+        timeSection.classList.add('visible');
+      } else {
+        timeSection.classList.remove('visible');
+      }
+
+      // 終了日ラベルと入力の表示切替
+      const endDateInput = document.getElementById('end_date');
+      const endDateLabel = document.querySelector('label[for="end_date"]');
+
+      if (hideEndDate) {
+        endDateInput.style.display = 'none';
+        endDateLabel.style.display = 'none';
+      } else {
+        endDateInput.style.display = '';
+        endDateLabel.style.display = '';
+      }
+      // 💡 取得時間表示の表示・非表示切替
+      const hoursContainer = document.getElementById('hoursContainer');
+      if (needTime) {
+        hoursContainer.style.display = 'block';
+        updateHoursValue(); // ← ついでに再計算
+      } else {
+        hoursContainer.style.display = 'none';
+        document.getElementById('hoursValue').textContent = '-';
+      }
+    }
+
+    // 承認者1件を取得して <select id="approver_user_id"> に反映
+    async function loadApprover(lineId) {
+      const sel = document.getElementById('approver_user_id');
+      sel.innerHTML = '<option value="">読み込み中...</option>';
+      sel.disabled = true;
+
+      try {
+        // APIは line_id 前提
+        const r = await fetch(`/api/approvers?line_id=${encodeURIComponent(lineId)}`);
+        const raw = await r.text();
+        const data = raw ? JSON.parse(raw) : null;
+
+        sel.innerHTML = '';
+
+        // 返却例: { found:true, 氏名, position_name, department_name, user_id }
+        if (!data || data.found !== true || !data.user_id) {
+          sel.innerHTML = '<option value="">承認者が見つかりません</option>';
+          sel.disabled = true;
+          return;
+        }
+
+        // optionを1件だけ作成
+        const opt = document.createElement('option');
+        opt.value = String(data.user_id);
+        const label = data.position_name
+          ? `${data.氏名}（${data.position_name}）`
+          : data.氏名;
+        opt.textContent = label;
+        sel.appendChild(opt);
+
+        // 1人固定なのでロック（UIは表示だけ）
+        sel.disabled = true;
+
+        // 申請ボタンがあれば有効化
+        const btn = document.getElementById('btnSubmit');
+        if (btn) btn.disabled = !opt.value;
+
+      } catch (e) {
+        sel.innerHTML = '<option value="">承認者取得エラー</option>';
+        sel.disabled = true;
+        const dbg = document.getElementById('debug');
+        if (dbg) dbg.textContent += `approver err: ${e.message}\n`;
+      }
+    }
+
+    // 複数承認者取得（user_idでリストをもらう）
+    async function loadApproverByUserId(userId) {
+      const sel = document.getElementById('approver_user_id');
+
+      // 要素がまだ無い（＝setupFormUI前）なら安全に抜ける
+      if (!sel) {
+        return;
+      }
+      sel.innerHTML = '<option value="">読み込み中...</option>';
+      sel.disabled = true;
+
+      try {
+        const url = `/api/approvers?user_id=${encodeURIComponent(userId)}&list=1`;
+        const r = await fetch(url);
+        const raw = await r.text();
+        if (!r.ok) {
+          sel.innerHTML = `<option value="">HTTP ${r.status} 承認者取得失敗</option>`;
+          return;
+        }
+
+        let data;
+        try {
+          data = raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          sel.innerHTML = `<option value="">JSON parse error: ${e.message}</option>`;
+          return;
+        }
+
+        // 単体/配列どちらでも配列に正規化（後方互換）
+        const list = Array.isArray(data)
+          ? data
+          : (data?.candidates || (data?.found ? [data] : []));
+
+        sel.innerHTML = '';
+
+        for (const a of list) {
+          const uid = a.user_id ?? a.承認者ID;
+          const name = a.氏名 ?? a.承認者名 ?? '';
+          const pos = a.position_name ?? '';
+          const dept = a.department_name ?? a.department_full_name ?? '';
+
+          const opt = document.createElement('option');
+          opt.value = String(uid);
+
+          // 表示は「氏名（役職）」、役職が無ければ氏名のみ
+          opt.textContent = pos ? `${name}（${pos}）` : name;
+
+          // title に部署情報を残して、ホバー/長押しで確認できるようにする
+          opt.title = [name && `氏名: ${name}`, pos && `役職: ${pos}`, dept && `部署: ${dept}`]
+            .filter(Boolean).join(' / ');
+
+          sel.appendChild(opt);
+        }
+
+        sel.selectedIndex = 0;
+        sel.disabled = false;
+        const btn = document.getElementById('btnSubmit');
+        if (btn) btn.disabled = false;
+        // ✅ ここでグローバルに保持する
+        window.__approverUserId = sel.value;
+
+        // 変更イベントでも更新しておく
+        sel.addEventListener('change', () => {
+          window.__approverUserId = sel.value;
+        });
+      } catch (e) {
+        sel.innerHTML = '<option value="">承認者取得エラー</option>';
+        debugLog(`[error] loadApproverByUserId: ${e.message}`);
+      }
+    }
+
+    async function loadDepartments() {
+      const sel = $('#department_select'); sel.innerHTML = '<option value="">-- 部署を選択 --</option>'; sel.disabled = true;
+      try {
+        const r = await fetch('/api/departments'); const list = await r.json();
+        for (const d of (Array.isArray(list) ? list : [])) {
+          const val = d.department_full_name || d.full_name || d.name || ''; const label = d.department_name || d.name || val;
+          if (!val) continue; const o = document.createElement('option'); o.value = String(val); o.textContent = label; sel.appendChild(o);
+        }
+        sel.disabled = sel.options.length <= 1;
+      } catch (e) { }
+    }
+    async function loadUsersByDepartment(deptFullName) {
+      const sel = $('#user_select'), btn = $('#doLink');
+      sel.innerHTML = '<option value="">-- 氏名を選択 --</option>'; sel.disabled = true; if (btn) btn.disabled = true;
+      try {
+        const r = await fetch(`/api/users-by-department?department=${encodeURIComponent(deptFullName)}`);
+        const list = await r.json();
+        for (const u of (Array.isArray(list) ? list : [])) {
+          const id = u.user_id || u.userId || u.id; const name = u.氏名 || u.name || u.full_name || u.fullName;
+          if (!id || !name) continue; const o = document.createElement('option'); o.value = String(id); o.textContent = String(name); sel.appendChild(o);
+        }
+        sel.disabled = sel.options.length <= 1;
+        sel.onchange = () => { if (btn) btn.disabled = !sel.value; };
+        if (btn) btn.disabled = !sel.value;
+      } catch (e) { }
+    }
+
+    async function linkLineId(lineId) {
+      // --- 二重送信ガード ---
+      if (window.__inFlight) {
+        alert('処理中です。少し待ってください。');
+        return false;
+      }
+      window.__inFlight = true;
+
+      // 押下中はボタン無効化（予防線）
+      const doLinkBtn = document.getElementById('doLink');
+      const yesBtn = document.getElementById('modalYes');
+      if (doLinkBtn) doLinkBtn.disabled = true;
+      if (yesBtn) yesBtn.disabled = true;
+
+      try {
+        const userId = (document.getElementById('user_select')?.value || '').trim();
+        if (!userId) { alert('氏名を選んでください。'); return false; }
+
+        const normForce = !!document.getElementById('force_check')?.checked;
+
+        // fetchSafeを入れていないならfetchのままでOK（入れていれば fetchSafe に変えて良し）
+        const resp = await fetch('/api/link-lineid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lineId, userId, force: normForce })
+        });
+
+        const raw = await resp.text();
+        let data = null; try { data = raw ? JSON.parse(raw) : null; } catch { }
+
+        const ok = resp.ok && (
+          !data || data.ok === true || data.success === true || String(data?.status || '').toLowerCase() === 'ok'
+        );
+
+        if (!ok) {
+          const reason = (data?.error || data?.message || raw || `${resp.status} ${resp.statusText}`);
+          alert(`紐付に失敗しました。\n理由: ${reason}`);
+          return false;
+        }
+
+        // 成功：申請画面へ（whoamiで判定させるためのリロード）
+        alert('登録しました。');
+        sessionStorage.setItem('line_linked', '1');
+        location.reload();
+        return true;
+
+      } catch (e) {
+        alert(`紐付に失敗しました。\n理由: ${e?.message || 'network error'}`);
+        return false;
+
+      } finally {
+        // 失敗時や例外時のみ有効化される想定（成功時はリロードで離脱）
+        window.__inFlight = false;
+        if (doLinkBtn) doLinkBtn.disabled = false;
+        if (yesBtn) yesBtn.disabled = false;
+      }
+    }
+
+    function setupLinkUI(lineId) {
+      showLink();
+      loadDepartments();
+      $('#department_select').addEventListener('change', e => { const v = e.target.value || ''; if (v) loadUsersByDepartment(v); });
+      const modal = $('#confirmModal'), text = $('#confirmText'), yes = $('#modalYes'), no = $('#modalNo');
+      const open = (t) => { text.textContent = t; modal.classList.add('open'); yes.focus(); };
+      const close = () => modal.classList.remove('open');
+      no.addEventListener('click', close); modal.addEventListener('click', (ev) => { if (ev.target === modal) close(); });
+      let yesHandler = null;
+      $('#doLink').addEventListener('click', () => {
+        const deptSel = $('#department_select');
+        const userSel = $('#user_select');
+        const deptName = deptSel.options[deptSel.selectedIndex]?.textContent || '';
+        const userName = userSel.options[userSel.selectedIndex]?.textContent || '';
+
+        const msg = `「${deptName}」の「${userName}」さんでＯＫ❓`;
+        open(msg);
+
+        if (yesHandler) yes.removeEventListener('click', yesHandler);
+        yesHandler = async () => {
+          close();
+          await linkLineId(lineId);
+        };
+        yes.addEventListener('click', yesHandler, { once: true });
+      });
+    }
+
+    async function setupFormUI(whoami) {
+      showForm();
+      $('#user-name').textContent = whoami.氏名 || whoami.name || '';
+      const dept = whoami.department_full_name || whoami.所属部署 || whoami.部署 || '';
+      $('#user-dept').textContent = dept;
+      window.__userId = whoami.user_id;
+      setupFormInteractions();
+
+      $('#btnSubmit').addEventListener('click', () => {
+        const leaveType = $('#leave_type').value;
+        const leaveLabel = $('#leave_type').selectedOptions[0]?.textContent ?? '';
+        const startDate = $('#start_date').value;
+        let endDate = $('#end_date').value || startDate;
+        const approver = $('#approver_user_id');
+        const approverName = approver.selectedOptions[0]?.textContent ?? '';
+        const reason = $('#reason').value.trim();
+        const days = $('#daysValue').textContent ?? '-';
+
+        // 終了日が非表示だったら自動的に開始日を代入
+        const hideEndDate = ['first_half', 'second_half', 'late', 'leave_early', 'outing'].includes(document.getElementById('leave_type').value);
+        if (hideEndDate || !endDate) {
+          endDate = startDate;
+        }
+
+        if (!leaveType) return alert('申請種別を選択してください');
+        if (!startDate) return alert('開始日を入力してください');
+        if (!endDate) return alert('終了日を入力してください');
+        if (!approver.value) return alert('承認者を選択してください');
+
+        // 📄 確認メッセージの組み立て
+        const lines = [
+          `【申請内容】`,
+          `種別：${leaveLabel}`,
+          `期間：${startDate} ～ ${endDate}${(leaveType === 'full_day' || leaveType === 'absence' || leaveType === 'special_leave') ? `（${days}日間）` : ''}`,
+        ];
+
+        // 時間入力が必要な種別だけ表示
+        const needTime = ['leave_early', 'absence', 'outing', 'late'].includes(leaveType);
+        if (needTime) {
+          const st = document.getElementById('start_time').value;
+          const et = document.getElementById('end_time').value;
+
+          if (st && et) {
+            lines.push(`時間：${st} ～ ${et}`);
+          }
+        }
+
+        // 💡 承認者はここで出す（時間の後）
+        lines.push(`申請先：${approverName}`);
+
+        // 理由（任意）
+        if (reason) {
+          lines.push(`理由：${reason}`);
+        }
+
+        const modal = $('#confirmModal');
+        const text = $('#confirmText');
+        const yes = $('#modalYes');
+        const no = $('#modalNo');
+
+        text.textContent = '以下の内容で申請しますか？\n\n' + lines.join('\n');
+        modal.classList.add('open');
+        yes.focus();
+
+        no.addEventListener('click', () => {
+          modal.classList.remove('open');
+        });
+
+        const handlerOnce = async () => {
+          modal.classList.remove('open');
+          // yes.removeEventListener('click', handlerOnce); ← once:true にするので不要
+          const request_id = crypto.randomUUID();
+          const payload = {
+            request_id: request_id,
+            user_id: window.__userId,
+            department_full_name: document.getElementById('user-dept').textContent.trim(),
+            leave_type: document.getElementById('leave_type').value,
+            start_date: document.getElementById('start_date').value,
+            end_date: document.getElementById('end_date')?.value || null,
+            start_time: document.getElementById('start_time')?.value || null,
+            end_time: document.getElementById('end_time')?.value || null,
+            reason: document.getElementById('reason')?.value || null,
+            contact_method: document.getElementById('contact_method')?.value || null,
+            approver_user_id: window.__approverUserId
+          };
+
+          try {
+            const res = await fetch('/api/submit-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const result = await res.json();
+            if (res.ok) {
+              // 申請者情報（通知メッセージ用に送る）
+              const applicantName = document.getElementById('user-name').textContent.trim();
+
+              // 承認者へ通知リクエスト
+              try {
+                const notifyRes = await fetch('/api/notify-approver', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    request_id: payload.request_id,
+                    approver_user_id: payload.approver_user_id,
+                    applicant_name: applicantName,
+                    leave_type: leaveLabel,
+                    start_date: payload.start_date,
+                    end_date: payload.end_date
+                  })
+                });
+
+                const notifyData = await notifyRes.json();
+                debugLog("📩 notify-approver結果:", notifyData);
+
+              } catch (notifyErr) {
+                debugLog('⚠️ 承認者通知エラー:', notifyErr);
+              }
+
+              alert('📨 申請を送信しました。\n承認者にLINE通知を送っています。');
+              //liff.closeWindow();
+            }
+
+          } catch (err) {
+            debugLog('❌ 申請送信エラー:', err);
+            alert('申請の送信中にエラーが発生しました。');
+          }
+        };
+
+        // ✅ ここが抜けていた
+        yes.addEventListener('click', handlerOnce, { once: true });
+
+        // TODO: 送信後にフォームリセットなどあればここに書く
+      });
+
+      $('#btnDeleteLink').addEventListener('click', async () => {
+        if (!confirm('このスマホからの申請登録を解除しますか？')) return;
+
+        const btn = $('#btnDeleteLink');
+        if (window.__inFlight) return;
+        window.__inFlight = true;
+
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '解除中...';
+
+        try {
+          const res = await fetch('/api/unlink-lineid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lineId: window.__lineId, userId: whoami.user_id, force: false })
+          });
+
+          const raw = await res.text();
+          let data = null;
+          try { data = raw ? JSON.parse(raw) : null; } catch { }
+
+          const ok = res.ok && (data?.success || data?.ok);
+          if (ok) {
+            alert('解除しました');
+            location.reload();
+          } else {
+            const msg = data?.error || data?.message || raw || `${res.status} ${res.statusText}`;
+            alert(`解除に失敗しました\n${msg}`);
+          }
+        } catch (e) {
+          alert(`解除に失敗しました\n${e.message}`);
+          debugLog('unlink: ' + e.message);
+        } finally {
+          window.__inFlight = false;
+          btn.disabled = false;
+          btn.textContent = origText;
+        }
+      });
+      updateTimeInputs();
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // ✅ モーダル関連は最初に1回だけ宣言して使い回す
+      const modal = document.getElementById('confirmModal');
+      const text = document.getElementById('confirmText');
+      const yes = document.getElementById('modalYes');
+      const no = document.getElementById('modalNo');
+      try {
+        await liff.init({ liffId: '2007688662-ElLglqWR' });
+        if (!liff.isInClient()) { alert('この画面はLINEアプリ内でのみ使用できます。'); return; }
+        const lineId = liff.getContext().userId;
+        if (!lineId) { alert('LINEログイン情報を取得できませんでした。'); return; }
+        window.__lineId = lineId;
+
+        const whoRes = await fetch(`/api/whoami?lineId=${encodeURIComponent(lineId)}`);
+        const whoami = await whoRes.json();
+        //await loadApproverList(whoami.user_id);
+        //debugLog("whoami: " + JSON.stringify(whoami));
+
+        if (whoami?.found) {
+          await setupFormUI(whoami);
+          await loadApproverByUserId(whoami.user_id);
+        } else {
+          await setupLinkUI(lineId);
+        }
+
+        if (sessionStorage.getItem('line_linked') === '1') {
+          sessionStorage.removeItem('line_linked');
+          if (!whoami?.found) location.reload();
+        }
+      } catch (err) {
+        debugLog('❌ LIFF初期化失敗:', err);
+        debugLog('init: ' + err.message);
+        alert('初期化でエラーが発生しました');
+      }
+    });
+
+    // 🔧 承認者候補の取得＆セレクトボックス生成
+    async function loadApproverList(userId) {
+      try {
+        const res = await fetch(`/api/approvers?user_id=${encodeURIComponent(userId)}&list=1`);
+        const approvers = await res.json();
+
+        if (!approvers.length) {
+          const opt = document.createElement('option');
+          opt.textContent = '承認者が見つかりません';
+          opt.disabled = true;
+          opt.selected = true;
+          sel.appendChild(opt);
+          sel.disabled = true;
+          return;
+        }
+
+        approvers.forEach(data => {
+          const opt = document.createElement('option');
+          opt.value = String(data.承認者ID);
+          opt.textContent = data.position_name
+            ? `${data.承認者名}（${data.position_name}）`
+            : data.承認者名;
+          sel.appendChild(opt);
+        });
+
+        sel.selectedIndex = 0;
+        sel.disabled = false;
+      } catch (err) {
+        debugLog("承認者取得失敗:", err);
+        alert("承認者リストの取得に失敗しました");
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const startTimeInput = document.getElementById('start_time');
+      const endTimeInput = document.getElementById('end_time');
+
+      const startPicker = flatpickr(startTimeInput, {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",
+        time_24hr: true,
+        locale: "ja",
+        onChange: function (selectedDates) {
+          const start = selectedDates[0];
+          const end = endTimeInput._flatpickr.selectedDates[0];
+          updateEndIfStartOnly(start);
+          updateHoursValue();
+          fixIfInconsistent(start, end);
+        },
+        onClose: function (selectedDates) {
+          const start = selectedDates[0];
+          const end = endTimeInput._flatpickr.selectedDates[0];
+          updateEndIfStartOnly(start);
+          updateHoursValue();
+          fixIfInconsistent(start, end);
+        }
+      });
+
+      const endPicker = flatpickr(endTimeInput, {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",
+        time_24hr: true,
+        locale: "ja",
+        onChange: function (selectedDates) {
+          const end = selectedDates[0];
+          const start = startTimeInput._flatpickr.selectedDates[0];
+          updateStartIfEndOnly(end);
+          updateHoursValue();
+          fixIfInconsistent(start, end);
+        },
+        onClose: function (selectedDates) {
+          const end = selectedDates[0];
+          const start = startTimeInput._flatpickr.selectedDates[0];
+          updateStartIfEndOnly(end);
+          updateHoursValue();
+          fixIfInconsistent(start, end);
+        }
+      });
+
+      updateTimeInputs(); // 最初に呼ぶ
+      document.getElementById('leave_type').addEventListener('change', updateTimeInputs);
+    });
+
+    let timeErrorAlreadyShown = false;
+
+    function fixIfInconsistent(start, end) {
+      if (!start || !end) return;
+
+      if (start >= end) {
+        if (!timeErrorAlreadyShown) {
+          alert('⚠️ 時刻の入力に誤りがあります。');
+          timeErrorAlreadyShown = true;
+        }
+        return;
+      }
+
+      // エラーが出なかったなら、次の判定のためにリセット
+      timeErrorAlreadyShown = false;
+    }
+
+    function updateEndIfStartOnly(start) {
+      if (!start) return;
+
+      const endInput = document.getElementById('end_time');
+      const endPicker = endInput._flatpickr;
+
+      // すでに終了時間が入っていたら補完しない
+      if (!endPicker || endPicker.selectedDates[0]) return;
+
+      // +1時間補完
+      const newEnd = new Date(start.getTime() + 60 * 60 * 1000);
+      endPicker.setDate(newEnd, true);
+    }
+
+    function updateStartIfEndOnly(end) {
+      if (!end) return;
+
+      const startInput = document.getElementById('start_time');
+      const startPicker = startInput._flatpickr;
+
+      // すでに開始時間が入っていたら補完しない
+      if (!startPicker || startPicker.selectedDates[0]) return;
+
+      // -1時間補完
+      const newStart = new Date(end.getTime() - 60 * 60 * 1000);
+      startPicker.setDate(newStart, true);
+    }
+
+    function updateHoursValue() {
+      const start = document.getElementById('start_time')._flatpickr?.selectedDates[0];
+      const end = document.getElementById('end_time')._flatpickr?.selectedDates[0];
+      const el = document.getElementById('hoursValue');
+
+      if (!start || !end || start >= end) {
+        el.textContent = '-';
+        el.classList.remove('pulse');
+        return;
+      }
+
+      const diffMs = end - start;
+      const totalMinutes = Math.floor(diffMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+
+      let display = '';
+      if (hours > 0) display += `${hours}時間`;
+      if (minutes > 0) display += `${minutes}分`;
+      if (hours === 0 && minutes === 0) display = '0分';
+
+      el.textContent = display;
+
+      // 🎉 ポンッとアニメーション
+      el.classList.remove('pulse');
+      void el.offsetWidth;
+      setTimeout(() => el.classList.add('pulse'), 50);
+    }
+
+    // 二重送信ガード
+    window.__inFlight = false;
+
+  </script>
+</body>
+
+</html>

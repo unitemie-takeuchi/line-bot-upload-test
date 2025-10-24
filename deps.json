@@ -1,0 +1,61 @@
+{
+  "config/dbConfig.js": [],
+  "config/graphAuth.js": [],
+  "handlers/receiveFileHandler.js": [
+    "utils/client.js",
+    "utils/libreofficeConvert.js",
+    "utils/replyMessage.js",
+    "utils/sessionManager.js"
+  ],
+  "handlers/reportHandler.js": [
+    "handlers/uploadToOneDrive.js",
+    "utils/carouselBuilder.js",
+    "utils/client.js",
+    "utils/employeeLoader.js",
+    "utils/replyMessage.js",
+    "utils/reportLoader.js",
+    "utils/sessionManager.js",
+    "utils/sqlClient.js"
+  ],
+  "handlers/uploadToOneDrive.js": [
+    "config/graphAuth.js",
+    "utils/fileHelper.js",
+    "utils/sqlClient.js"
+  ],
+  "main.js": [
+    "handlers/receiveFileHandler.js",
+    "handlers/reportHandler.js",
+    "handlers/uploadToOneDrive.js",
+    "utils/dailyCleaner.js",
+    "utils/replyMessage.js",
+    "utils/reportLoader.js",
+    "utils/sessionManager.js"
+  ],
+  "utils/carouselBuilder.js": [],
+  "utils/client.js": [],
+  "utils/dailyCleaner.js": [],
+  "utils/employeeLoader.js": [
+    "utils/sqlClient.js"
+  ],
+  "utils/fileHelper.js": [],
+  "utils/libreofficeConvert.js": [],
+  "utils/replyMessage.js": [
+    "utils/carouselBuilder.js",
+    "utils/employeeLoader.js"
+  ],
+  "utils/reportLoader.js": [
+    "handlers/uploadToOneDrive.js",
+    "utils/carouselBuilder.js",
+    "utils/employeeLoader.js",
+    "utils/replyMessage.js",
+    "utils/sessionManager.js",
+    "utils/sqlClient.js"
+  ],
+  "utils/sessionManager.js": [
+    "config/dbConfig.js",
+    "utils/employeeLoader.js"
+  ],
+  "utils/sqlClient.js": [
+    "config/dbConfig.js"
+  ]
+}
