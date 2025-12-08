@@ -2,6 +2,9 @@
 require('dotenv').config();
 const fs = require('fs');
 const { notifyAdmin } = require('./utils/lineNotify');
+const mvReportHandler = require("./handlers/mvReportHandler");
+const { getEmployeeList, getSelectedEmployeeCode } = require('./utils/employeeLoader');
+const { createMVEmployeeCarousel } = require('./utils/carouselBuilder');
 
 // ✅ .env 存在チェック（任意だけど有効）
 if (!fs.existsSync('.env')) {
@@ -13,7 +16,8 @@ if (!fs.existsSync('.env')) {
 // ✅ 環境変数の必須チェック
 const requiredEnvVars = [
   { key: 'PORT', validate: (v) => !isNaN(parseInt(v, 10)) },
-  { key: 'BASE_SHORT_URL', validate: (v) => {
+  {
+    key: 'BASE_SHORT_URL', validate: (v) => {
       try {
         const u = new URL(v);
         return u.protocol === 'http:' || u.protocol === 'https:';
@@ -55,11 +59,17 @@ const { handleSelectedReportName } = require('./utils/reportLoader');
 const { router: shortlinkRouter, storeShortLink } = require('./utils/shortlinkController');
 
 app.use('/', shortlinkRouter);
+app.use('/api/furyou', require('./routes/api/furyou'));
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const events = req.body.events;
     for (const event of events) {
+      if (event.type === 'postback') {
+        await handlePostback(event);
+        continue;
+      }
+
       if (event.type === 'message') {
         // テキストは handleMessage、ファイルは handleFile に振り分け
         if (event.message.type === 'text') {
@@ -78,6 +88,21 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     res.status(500).end();
   }
 });
+
+async function handlePostback(event) {
+  const data = event.postback.data;
+  const userId = event.source.userId;
+  const replyToken = event.replyToken;
+  const session = sessionManager.getSession(userId) || sessionManager.initSession(userId);
+
+  if (
+    data.startsWith("mvEmpSelect:") ||
+    data.startsWith("mvEmpNext:") ||
+    data.startsWith("mvReport:")
+  ) {
+    return await mvReportHandler.handlePostback(event);
+  }
+}
 
 async function handleMessage(event) {
   const userId = event.source.userId;
@@ -114,6 +139,11 @@ async function handleMessage(event) {
     sessionManager.setStep(userId, 'selectShijishoOption');
 
     return replyMessage.sendInstructionOptions(replyToken); // ← 送付／参照カルーセルを返す処理
+  }
+
+  if (text === "報告書") {
+    sessionManager.clear(userId);
+    return await mvReportHandler.handleStartCommand(userId, replyToken);
   }
 
   if (/^\d{3}$/.test(text) && session.step === 'selectEmployee') {

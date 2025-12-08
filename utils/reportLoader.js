@@ -144,7 +144,7 @@ async function getReportsByMode(mode, reportMode) {
     });
 
     let whereClause = '';
-    if (['指示書', 'オーダー', '実績'].includes(mode)) {
+    if (['指示書', 'オーダー', '実績', '報告書'].includes(mode)) {
       whereClause = `WHERE ReportSelect = '${mode}'`;
     }
     logger.debug(`[DB] whereClause = ${whereClause}`);

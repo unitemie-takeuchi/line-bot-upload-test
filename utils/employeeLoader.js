@@ -36,7 +36,6 @@ async function getEmployeeList() {
   }
 }
 
-
 // ユーザーごとの選択済み社員コードを取得
 async function getSelectedEmployeeCode(userId) {
   try {

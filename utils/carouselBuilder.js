@@ -75,7 +75,92 @@ function createTitleCarousel(titles, page = 0) {
   };
 }
 
+function createMVEmployeeCarousel(employees, page = 0, selectedCode = null) {
+  const selectedCodeStr = (selectedCode || '').toString().padStart(3, '0');
+
+  // 並び替え
+  const sortedEmployees = [...employees].sort((a, b) => {
+    const codeA = a.code.toString().padStart(3, '0');
+    const codeB = b.code.toString().padStart(3, '0');
+
+    if (codeA === selectedCodeStr) return -1;
+    if (codeB === selectedCodeStr) return 1;
+    return codeA.localeCompare(codeB);
+  });
+
+  const start = page * 5;
+  const limited = sortedEmployees.slice(start, start + 5);
+
+  const columns = limited.map(emp => ({
+    title: `${emp.code} ${emp.name}`,
+    text: "担当者を選択してください",
+    actions: [
+      {
+        type: "postback",
+        label: "選 択",
+        data: `mvEmpSelect:${emp.code}`
+      }
+    ]
+  }));
+
+  if (sortedEmployees.length > start + 5) {
+    columns.push({
+      title: "次のページ",
+      text: "さらに表示します",
+      actions: [
+        {
+          type: "postback",
+          label: "次へ ▶",
+          data: `mvEmpNext:${page + 1}`
+        }
+      ]
+    });
+  }
+
+  return {
+    carousel: {
+      type: "template",
+      altText: "担当者選択",
+      template: {
+        type: "carousel",
+        columns
+      }
+    },
+    sortedEmployees
+  };
+}
+
+
+function createReportCarousel(reports, page = 0) {
+  const pageSize = 10;
+  const start = page * pageSize;
+  const pageData = reports.slice(start, start + pageSize);
+
+  const columns = pageData.map(rep => ({
+    title: rep.ReportName || "（未設定）",
+    text: "報告書の種類を選択してください",
+    actions: [
+      {
+        type: "postback",
+        label: "選択",
+        data: `mvReport:${rep.ReportName}`
+      }
+    ]
+  }));
+
+  return {
+    type: "template",
+    altText: "報告書の種類一覧です",
+    template: {
+      type: "carousel",
+      columns
+    }
+  };
+}
+
 module.exports = {
   createEmployeeCarousel,
-  createTitleCarousel
+  createTitleCarousel,
+  createReportCarousel,
+  createMVEmployeeCarousel
 };
