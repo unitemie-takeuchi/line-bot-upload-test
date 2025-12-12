@@ -1,0 +1,5 @@
+{
+    "window.commandCenter": true,
+    "chat.commandCenter.enabled": true,
+    "debug.toolBarLocation": "docked"
+}

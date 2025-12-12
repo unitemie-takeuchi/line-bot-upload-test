@@ -1,4 +1,5 @@
 // utils/sqlClient.js
+require('dotenv').config();
 const logger = require('./logger');
 const sql = require('mssql');
 const dbconfig = require('../config/dbConfig');

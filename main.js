@@ -48,7 +48,8 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 const app = express();
-app.use(express.static('public'));
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
 const client = new line.Client(config);
 const sessionManager = require('./utils/sessionManager');
 const reportHandler = require('./handlers/reportHandler');

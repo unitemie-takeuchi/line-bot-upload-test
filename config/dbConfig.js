@@ -5,6 +5,7 @@ module.exports = {
   password: process.env.SQL_PASSWORD,
   server: process.env.SQL_SERVER,
   database: process.env.SQL_DATABASE,
+  port: parseInt(process.env.SQL_PORT),
   options: {
     encrypt: true,
     trustServerCertificate: true

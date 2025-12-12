@@ -3,7 +3,7 @@
 const logger = require("../utils/logger");
 const sessionManager = require("../utils/sessionManager");
 const { getEmployeeList, getSelectedEmployeeCode } = require("../utils/employeeLoader");
-const { updateUserSelection } = require("../utils/sqlClient"); 
+const { updateUserSelection } = require("../utils/sqlClient");
 const { createReportCarousel, createMVEmployeeCarousel } = require("../utils/carouselBuilder");
 const reportLoader = require("../utils/reportLoader");
 const replyMessage = require("../utils/replyMessage");
@@ -63,13 +63,13 @@ async function handleReportTypeSelect(userId, reportType, replyToken) {
 
   const session = sessionManager.getSession(userId) || {};
   const employeeCode = session.employeeCode;
-
+  const baseUrl = "https://test.unitemie.com/liff/mv-report/index.html";
   // ▼ LIFF URL
-  const liffUrl = `https://xxx/mv?emp=${employeeCode}&type=${encodeURIComponent(reportType)}`;
+  const liffUrl = `${baseUrl}?owner_cd=${employeeCode}&emp=${encodeURIComponent(employeeCode)}`;
 
   return replyMessage.sendText(
     replyToken,
-    `担当者：${employeeCode}\n報告書：${reportType}\n\nこちらから入力してください：\n${liffUrl}`
+    `担当者：${employeeCode}\n報告書：${reportType}\n\n承認・否認処理をお願いします：\n${liffUrl}`
   );
 }
 // --------------------------------------------------

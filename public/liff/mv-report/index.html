@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MV不良報告書一覧（テスト）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 1em;
+      background: #f7f7f7;
+    }
+
+    h1 {
+      font-size: 1.3em;
+      margin-bottom: 1em;
+    }
+
+    #list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .item {
+      padding: 10px 12px;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      text-align: left;
+      font-size: 0.9em;
+    }
+
+    .item .line1 {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .item .line2 {
+      font-size: 0.8em;
+      color: #666;
+    }
+
+    .done {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="title">MV不良報告書一覧</h1>
+
+  <div id="list">
+    読み込み中…
+  </div>
+
+  <!-- LIFF SDK だけは外部（CDN）から -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <script>
+    // ★ 一覧用 LIFF ID（後で正式なものに変えてね）
+    const LIST_LIFF_ID = "2007688662-6dk5WiCy";
+    // ★ ビューア用 LIFF ID（さっき動いたやつ）
+    const VIEWER_LIFF_ID = "2007688662-3Wwge6ov";
+
+    // テスト用のダミーデータ（まずは動作確認用）
+    const dummyReports = [
+      {
+        id: "0001",
+        date: "2025/12/11",
+        title: "テスト報告書（商品破損）",
+        fileName: "005_0001-MV不良報告_林達郎.pdf",
+        status: "pending"
+      },
+      {
+        id: "0002",
+        date: "2025/12/12",
+        title: "テスト報告書（賞味期限）",
+        fileName: "005_0002-MV不良報告_林達郎.pdf",
+        status: "approved"
+      }
+    ];
+
+    async function main() {
+      // ▼ LIFF 初期化（とりあえずエラーは握りつぶしてもOK）
+      try {
+        await liff.init({ liffId: LIST_LIFF_ID });
+      } catch (e) {
+        console.warn("LIFF init 失敗（ブラウザテスト中なら無視してOK）", e);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const empName = params.get("emp") || "担当者";     // 表示用
+      const ownerCd = params.get("owner_cd") || "036";  // データ絞り込み用
+
+      document.getElementById("title").textContent =
+        `MV不良報告書一覧（${empName}）`;
+
+      const listEl = document.getElementById("list");
+      listEl.innerHTML = "";
+
+      let reports = [];
+
+      try {
+        const res = await fetch(`/api/furyou/list?owner_cd=${ownerCd}`);
+        reports = await res.json();
+      } catch (e) {
+        listEl.textContent = "一覧の取得に失敗しました";
+        console.error(e);
+        return;
+      }
+
+      reports.forEach(rep => {
+        const div = document.createElement("div");
+        div.className = "item" + (rep.status !== "00" ? " done" : "");
+
+        const line1 = document.createElement("div");
+        line1.className = "line1";
+        line1.textContent = `[${rep.seq}] ${rep.title}`;
+
+        const line2 = document.createElement("div");
+        line2.className = "line2";
+        line2.textContent =
+          rep.status === "01"
+            ? "✅ 承認済"
+            : rep.status === "02"
+              ? "❌ 却下済"
+              : "⏳ 未処理";
+
+        div.appendChild(line1);
+        div.appendChild(line2);
+
+        div.addEventListener("click", () => {
+          const encoded = encodeURIComponent(rep.fileName);
+          const viewerUrl = `https://liff.line.me/${VIEWER_LIFF_ID}?pdf=${encoded}`;
+          location.href = viewerUrl;
+        });
+
+        listEl.appendChild(div);
+      });
+
+    }
+
+    main();
+  </script>
+</body>
+
+</html>

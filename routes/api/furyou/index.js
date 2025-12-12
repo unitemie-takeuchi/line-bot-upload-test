@@ -11,4 +11,7 @@ router.use('/list', require('./list'));
 router.use('/approve', require('./approve'));
 router.use('/reject', require('./reject'));
 
+// 新規：PDFビューアAPI
+router.use('/pdf', require('./mv-pdf-viewer'));
+
 module.exports = router;
