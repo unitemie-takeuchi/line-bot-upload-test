@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MV不良報告書一覧（テスト）</title>
+  <title>MV不良報告書一覧</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
   <style>
     body {
       font-family: sans-serif;
@@ -14,137 +15,190 @@
     }
 
     h1 {
-      font-size: 1.3em;
-      margin-bottom: 1em;
+      font-size: 1em;
+      margin: 0 0 10px 0;
+      color: #666;
+    }
+
+    .action-row {
+      margin-bottom: 15px;
+    }
+
+    .finish {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.1em;
+      font-weight: bold;
+      border-radius: 8px;
+      border: none;
+      background: #007bff;
+      /* ←ここを元の青（#007bff）に書き換えて！ */
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+      /* 影も青っぽくしておいたよ */
+      transition: all 0.2s;
+    }
+
+    .finish:active {
+      transform: scale(0.96);
+      background: #0056b3;
+      /* 押した時も濃い青に！ */
     }
 
     #list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
 
     .item {
-      padding: 10px 12px;
+      padding: 15px;
       background: #fff;
-      border-radius: 6px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
       cursor: pointer;
-      text-align: left;
-      font-size: 0.9em;
+      border-left: 8px solid #ff9800;
+      transition: all 0.2s;
     }
 
-    .item .line1 {
+    .item.done {
+      border-left: 8px solid #ccc;
+      background: #fdfdfd;
+      opacity: 0.6;
+    }
+
+    .line1 {
       font-weight: bold;
+      font-size: 1em;
       margin-bottom: 4px;
+      color: #222;
     }
 
-    .item .line2 {
-      font-size: 0.8em;
+    .line2 {
+      font-size: 0.85em;
       color: #666;
     }
 
-    .done {
-      opacity: 0.5;
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .status-00 {
+      background: #fff3e0;
+      color: #ff9800;
+      border: 1px solid #ff9800;
+    }
+
+    .status-10 {
+      background: #e8f5e9;
+      color: #4caf50;
+    }
+
+    .status-11 {
+      background: #e3f2fd;
+      color: #2196f3;
+    }
+
+    .status-20 {
+      background: #ffebee;
+      color: #f44336;
     }
   </style>
 </head>
 
 <body>
   <h1 id="title">MV不良報告書一覧</h1>
-
-  <div id="list">
-    読み込み中…
+  <div class="action-row">
+    <button id="finishBtn" class="finish">確認処理完了</button>
   </div>
-
-  <!-- LIFF SDK だけは外部（CDN）から -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <div id="list">読み込み中…</div>
 
   <script>
-    // ★ 一覧用 LIFF ID（後で正式なものに変えてね）
-    const LIST_LIFF_ID = "2007688662-6dk5WiCy";
-    // ★ ビューア用 LIFF ID（さっき動いたやつ）
-    const VIEWER_LIFF_ID = "2007688662-3Wwge6ov";
-
-    // テスト用のダミーデータ（まずは動作確認用）
-    const dummyReports = [
-      {
-        id: "0001",
-        date: "2025/12/11",
-        title: "テスト報告書（商品破損）",
-        fileName: "005_0001-MV不良報告_林達郎.pdf",
-        status: "pending"
-      },
-      {
-        id: "0002",
-        date: "2025/12/12",
-        title: "テスト報告書（賞味期限）",
-        fileName: "005_0002-MV不良報告_林達郎.pdf",
-        status: "approved"
-      }
-    ];
-
     async function main() {
-      // ▼ LIFF 初期化（とりあえずエラーは握りつぶしてもOK）
       try {
-        await liff.init({ liffId: LIST_LIFF_ID });
-      } catch (e) {
-        console.warn("LIFF init 失敗（ブラウザテスト中なら無視してOK）", e);
-      }
+        // ここに直接設定値を書いていたよね！
+        await liff.init({ liffId: "2007688662-6dk5WiCy" });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
 
-      const params = new URLSearchParams(window.location.search);
-      const empName = params.get("emp") || "担当者";     // 表示用
-      const ownerCd = params.get("owner_cd") || "036";  // データ絞り込み用
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
 
-      document.getElementById("title").textContent =
-        `MV不良報告書一覧（${empName}）`;
+        const params = new URLSearchParams(window.location.search);
+        const ownerCd = params.get("owner_cd");
+        if (!ownerCd) throw new Error("担当者コードが見つかりません。");
 
-      const listEl = document.getElementById("list");
-      listEl.innerHTML = "";
+        const res = await fetch(`https://test.unitemie.com/api/furyou/list?owner_cd=${ownerCd}`);
+        if (!res.ok) throw new Error("データの取得に失敗しました");
+        const reports = await res.json();
 
-      let reports = [];
+        const listEl = document.getElementById("list");
+        listEl.innerHTML = "";
+        let ownerLabel = "";
 
-      try {
-        const res = await fetch(`/api/furyou/list?owner_cd=${ownerCd}`);
-        reports = await res.json();
-      } catch (e) {
-        listEl.textContent = "一覧の取得に失敗しました";
-        console.error(e);
-        return;
-      }
+        if (reports.length === 0) {
+          listEl.textContent = "対象の報告書はありません。";
+          return;
+        }
 
-      reports.forEach(rep => {
-        const div = document.createElement("div");
-        div.className = "item" + (rep.status !== "00" ? " done" : "");
+        reports.forEach((rep) => {
+          if (!ownerLabel) ownerLabel = `${rep.ownerCd} ${rep.ownerName}`;
 
-        const line1 = document.createElement("div");
-        line1.className = "line1";
-        line1.textContent = `[${rep.seq}] ${rep.title}`;
+          let statusTxt = "";
+          let badgeClass = "";
+          let isDone = true;
 
-        const line2 = document.createElement("div");
-        line2.className = "line2";
-        line2.textContent =
-          rep.status === "01"
-            ? "✅ 承認済"
-            : rep.status === "02"
-              ? "❌ 却下済"
-              : "⏳ 未処理";
+          if (rep.status === "10") {
+            statusTxt = "✅ 承認済"; badgeClass = "status-10";
+          } else if (rep.status === "11") {
+            statusTxt = "🤖 自動承認"; badgeClass = "status-11";
+          } else if (rep.status === "20") {
+            statusTxt = "❌ 否認済"; badgeClass = "status-20";
+          } else {
+            statusTxt = "⏳ 未処理"; badgeClass = "status-00"; isDone = false;
+          }
 
-        div.appendChild(line1);
-        div.appendChild(line2);
+          const div = document.createElement("div");
+          div.className = "item" + (isDone ? " done" : "");
+          div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="flex: 1;">
+                <div class="line1">[${rep.seq}] ${rep.title}</div>
+                <div class="line2">${rep.ownerCd} ${rep.ownerName}</div>
+              </div>
+              <div class="badge ${badgeClass}">${statusTxt}</div>
+            </div>
+          `;
 
-        div.addEventListener("click", () => {
-          const encoded = encodeURIComponent(rep.fileName);
-          const viewerUrl = `https://liff.line.me/${VIEWER_LIFF_ID}?pdf=${encoded}`;
-          location.href = viewerUrl;
+          div.addEventListener("click", async () => {
+            try {
+              await fetch(`https://test.unitemie.com/api/save-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: userId, reportId: rep.id,
+                  ownerCd: rep.ownerCd, ownerName: rep.ownerName,
+                  pdfFileName: rep.fileName
+                })
+              });
+              window.location.href = `https://liff.line.me/2007688662-oEf8sKgj?reportId=${rep.id}&v=${Date.now()}`;
+            } catch (error) { alert(error); }
+          });
+          listEl.appendChild(div);
         });
 
-        listEl.appendChild(div);
-      });
-
+        if (ownerLabel) document.getElementById("title").textContent = `一覧（${ownerLabel}）`;
+      } catch (e) { alert(e); }
     }
 
-    main();
+    document.getElementById("finishBtn").addEventListener("click", () => {
+      liff.isInClient() ? liff.closeWindow() : alert("ブラウザを閉じてください");
+    });
+    document.addEventListener("DOMContentLoaded", main);
   </script>
 </body>
 

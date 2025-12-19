@@ -1,50 +1,49 @@
-//C:\Line-Bot-Upload\line-bot-upload-test\routes\api\furyou\reject.js
-
 const express = require('express');
 const router = express.Router();
-
-const db = require("../../../utils/sqlClient");
-//const mailer = require('../../../utils/mailer');
+const sql = require('mssql');
 
 router.post('/', async (req, res) => {
-    const { id, reasonLabel, comment } = req.body;
-
-    if (!id || !reasonLabel) {
-        return res.status(400).json({ error: "id and reasonLabel are required" });
-    }
-
     try {
-        const rows = await db.query(`
-            SELECT PDFFileName, owner_cd
-            FROM T_MV不良報告書
-            WHERE id = @id
-        `, { id });
+        const { id, reason } = req.body;
 
-        if (rows.length === 0) {
-            return res.status(404).json({ error: "Record not found" });
+        if (!id || !reason) {
+            return res.status(400).json({
+                success: false,
+                message: 'id または 否認理由が不足しています',
+            });
         }
 
-        const fileName = rows[0].PDFFileName;
-
-        await db.query(`
-            UPDATE T_MV不良報告書
-            SET Status = '20',
-                reject_reason = @reason,
-                processed_dt = GETDATE()
-            WHERE id = @id
-        `, { id, reason: `${reasonLabel} / ${comment || ""}` });
-
-        await mailer.sendRejectMail({
-            fileName,
-            reasonLabel,
-            comment
+        const pool = await sql.connect({
+            user: process.env.SQL_USER,
+            password: process.env.SQL_PASSWORD,
+            server: process.env.SQL_SERVER,
+            database: process.env.SQL_DATABASE,
+            options: {
+                encrypt: true,
+                trustServerCertificate: true,
+            },
         });
 
-        res.json({ ok: true });
+        await pool.request()
+            .input('id', sql.Int, id)
+            .input('reason', sql.NVarChar, reason)
+            .query(`
+                UPDATE dbo.T_MV不良報告書
+                SET
+                    status = '20',
+                    reject_reason = @reason,
+                    processed_dt = GETDATE()
+                WHERE id = @id
+            `);
+
+        return res.json({ success: true });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server Error" });
+        console.error('[REJECT ERROR]', err);
+        return res.status(500).json({
+            success: false,
+            message: '否認処理に失敗しました',
+        });
     }
 });
 

@@ -14,4 +14,7 @@ router.use('/reject', require('./reject'));
 // 新規：PDFビューアAPI
 router.use('/pdf', require('./mv-pdf-viewer'));
 
+// 新規：PNGビューアAPI
+router.use('/png', require('./mv-png-viewer'));
+
 module.exports = router;

@@ -53,13 +53,13 @@ router.get("/", async (req, res) => {
       const ownerCd = parts[0];
       const seqTitle = parts[1];
       const ownerName = parts[2].replace(".pdf", "");
-
       const seq = seqTitle.split("-")[0];
 
       return {
         id: row.id,
         seq: seq,
         title: seqTitle,
+        ownerCd: ownerCd,
         ownerName: ownerName,
         fileName: row.pdf_file_name,
         status: row.status

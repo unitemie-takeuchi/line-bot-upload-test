@@ -49,7 +49,11 @@ const config = {
 };
 const app = express();
 const path = require('path');
+// 静的ファイル
 app.use(express.static(path.join(__dirname, 'public')));
+// API 用だけ JSON を有効化
+app.use('/api', express.json());
+app.use('/api', express.urlencoded({ extended: true }));
 const client = new line.Client(config);
 const sessionManager = require('./utils/sessionManager');
 const reportHandler = require('./handlers/reportHandler');
@@ -61,6 +65,100 @@ const { router: shortlinkRouter, storeShortLink } = require('./utils/shortlinkCo
 
 app.use('/', shortlinkRouter);
 app.use('/api/furyou', require('./routes/api/furyou'));
+
+// --- 【ここから追加】LIFFデータ一時保存用のAPI ---
+const sql = require('mssql'); // すでに他で使っている場合は const は不要だよ
+const dbConfig = require('./config/dbConfig'); // 既存の設定ファイルを利用
+
+// 1. レポート情報の一時保存 (POST)
+app.post('/api/save-report', async (req, res) => {
+  try {
+    const { userId, reportId, ownerCd, ownerName, pdfFileName } = req.body;
+    if (!userId) return res.status(400).send('userId is required');
+
+    let pool = await sql.connect(dbConfig);
+    await pool.request()
+      .input('userId', sql.NVarChar, userId)
+      .input('reportId', sql.Int, reportId)
+      .input('ownerCd', sql.NVarChar, ownerCd)
+      .input('ownerName', sql.NVarChar, ownerName)
+      .input('pdfFileName', sql.NVarChar, pdfFileName)
+      .query(`
+                MERGE INTO TempLiffData AS target
+                USING (SELECT @userId AS UserId) AS source
+                ON (target.UserId = source.UserId)
+                WHEN MATCHED THEN
+                    UPDATE SET ReportId = @reportId, OwnerCd = @ownerCd, 
+                               OwnerName = @ownerName, PdfFileName = @pdfFileName, UpdatedAt = GETDATE()
+                WHEN NOT MATCHED THEN
+                    INSERT (UserId, ReportId, OwnerCd, OwnerName, PdfFileName)
+                    VALUES (@userId, @reportId, @ownerCd, @ownerName, @pdfFileName);
+            `);
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('[ERROR] /api/save-report:', err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// 2. レポート情報の取得 (GET)
+app.get('/api/get-report', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).send('userId is required');
+
+    let pool = await sql.connect(dbConfig);
+    let result = await pool.request()
+      .input('userId', sql.NVarChar, userId)
+      .query('SELECT * FROM TempLiffData WHERE UserId = @userId');
+
+    if (result.recordset.length > 0) {
+      res.json(result.recordset[0]);
+    } else {
+      res.status(404).send('Data not found');
+    }
+  } catch (err) {
+    console.error('[ERROR] /api/get-report:', err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// 3. レポートIDを指定して詳細情報を取得 (GET)
+app.get('/api/get-report-detail', async (req, res) => {
+  try {
+    const reportId = req.query.reportId;
+    if (!reportId) return res.status(400).send('reportId is required');
+
+    let pool = await sql.connect(dbConfig);
+    let result = await pool.request()
+      .input('reportId', sql.Int, reportId)
+      .query('SELECT * FROM dbo.T_MV不良報告書 WHERE id = @reportId'); // id に修正済み！
+
+    if (result.recordset.length > 0) {
+      const data = result.recordset[0];
+      const fileName = data.pdf_file_name || "";
+
+      // 【復活！】ファイル名から名前を抜き出すロジック
+      const nameParts = fileName.split('_');
+      // 形式：担当者CD_レポート名称_担当者名.pdf なので 3番目(index 2)
+      let rawName = nameParts.length > 2 ? nameParts[2] : "（名前なし）";
+      const finalName = rawName.replace(/\.pdf$/i, ""); // .pdf を消す
+
+      const responseData = {
+        ReportId: data.id,
+        OwnerCd: data.owner_cd,
+        OwnerName: finalName, // 切り出した名前をセット！
+        PdfFileName: data.pdf_file_name
+      };
+      res.json(responseData);
+    } else {
+      res.status(404).send('Report not found');
+    }
+  } catch (err) {
+    console.error('[ERROR] /api/get-report-detail:', err);
+    res.status(500).send('Server Error');
+  }
+});
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {

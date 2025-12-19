@@ -63,10 +63,12 @@ async function handleReportTypeSelect(userId, reportType, replyToken) {
 
   const session = sessionManager.getSession(userId) || {};
   const employeeCode = session.employeeCode;
-  const baseUrl = "https://test.unitemie.com/liff/mv-report/index.html";
+  const LIFF_ID = "2007688662-6dk5WiCy";
   // ▼ LIFF URL
-  const liffUrl = `${baseUrl}?owner_cd=${employeeCode}&emp=${encodeURIComponent(employeeCode)}`;
-
+  const liffUrl =
+    `https://liff.line.me/${LIFF_ID}` +
+    `?owner_cd=${employeeCode}&emp=${encodeURIComponent(employeeCode)}`;
+  console.log("LIFF URL =", liffUrl);  
   return replyMessage.sendText(
     replyToken,
     `担当者：${employeeCode}\n報告書：${reportType}\n\n承認・否認処理をお願いします：\n${liffUrl}`

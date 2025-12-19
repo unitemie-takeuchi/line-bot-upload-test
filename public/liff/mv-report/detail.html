@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MV不良報告書 承認</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 1em;
+            background: #f7f7f7;
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 1em;
+            margin: 0 0 10px 0;
+            color: #666;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .action-row button {
+            flex: 1;
+            padding: 12px 5px;
+            font-size: 0.9em;
+            font-weight: bold;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .approve {
+            background: #4caf50;
+        }
+
+        .reject {
+            background: #f44336;
+        }
+
+        .back {
+            background: #6c757d;
+        }
+
+        .box {
+            background: #fff;
+            padding: 1em;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1em;
+        }
+
+        .info-row {
+            margin-bottom: 4px;
+            font-size: 0.9em;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content select,
+        .modal-content textarea {
+            width: 100%;
+            margin-top: 5px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>不良報告書の確認</h1>
+    <div class="action-row">
+        <button class="approve" id="approveBtn" disabled>承認</button>
+        <button class="reject" id="openRejectBtn" disabled>否認</button>
+        <button class="back" id="backBtn" disabled>戻る</button>
+    </div>
+    <div class="box">
+        <div class="info-row">報告ID：<span id="reportId">読み込み中...</span></div>
+        <div class="info-row">担当者：<span id="empName">-</span></div>
+        <img id="pngImage" style="width:100%; margin-top:12px; border: 1px solid #eee;" />
+    </div>
+
+    <div id="rejectModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>否認理由を入力してください</h2>
+            <select id="rejectReasonSelect">
+                <option value="">選択してください</option>
+                <option value="内容不備">内容不備</option>
+                <option value="記載漏れ">記載漏れ</option>
+                <option value="画像不明瞭">画像不明瞭</option>
+                <option value="その他">その他</option>
+            </select>
+            <textarea id="rejectReasonText" rows="4" placeholder="詳細を入力してください"></textarea>
+            <div class="modal-actions">
+                <button class="reject" id="confirmRejectBtn">登録する</button>
+                <button class="back" id="cancelRejectBtn">戻る</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentReport = null;
+
+        function backToIndex() {
+            const backUrl = `https://liff.line.me/2007688662-6dk5WiCy?owner_cd=${currentReport.OwnerCd}`;
+            window.location.replace(backUrl);
+        }
+
+        async function main() {
+            try {
+                await liff.init({ liffId: "2007688662-oEf8sKgj" });
+                if (!liff.isLoggedIn()) { liff.login(); return; }
+
+                const params = new URLSearchParams(window.location.search);
+                const reportIdFromUrl = params.get("reportId");
+                if (!reportIdFromUrl) throw new Error("レポートID不明");
+
+                const res = await fetch(`https://test.unitemie.com/api/get-report-detail?reportId=${reportIdFromUrl}`);
+                if (!res.ok) throw new Error("データ取得失敗");
+                currentReport = await res.json();
+
+                document.getElementById("reportId").textContent = currentReport.ReportId;
+                document.getElementById("empName").textContent = `${currentReport.OwnerCd} ${currentReport.OwnerName}`;
+
+                const pngFileName = currentReport.PdfFileName ? currentReport.PdfFileName.replace(/\.pdf$/i, ".png") : "";
+                document.getElementById("pngImage").src = `https://test.unitemie.com/api/furyou/png?file=${encodeURIComponent(pngFileName)}`;
+
+                document.querySelectorAll("button").forEach(btn => btn.disabled = false);
+            } catch (e) { alert(e); }
+        }
+
+        document.getElementById("approveBtn").addEventListener("click", async () => {
+            const res = await fetch(`https://test.unitemie.com/api/furyou/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentReport.ReportId, owner_cd: currentReport.OwnerCd, status: "10" })
+            });
+            if ((await res.json()).success) {
+                alert("承認しました。");
+                backToIndex();
+            }
+        });
+
+        document.getElementById("openRejectBtn").addEventListener("click", () => document.getElementById("rejectModal").classList.remove("hidden"));
+        document.getElementById("cancelRejectBtn").addEventListener("click", () => document.getElementById("rejectModal").classList.add("hidden"));
+
+        document.getElementById("confirmRejectBtn").addEventListener("click", async () => {
+            const reason = document.getElementById("rejectReasonSelect").value;
+            if (!reason) return alert("理由を選択してください");
+            const res = await fetch(`https://test.unitemie.com/api/furyou/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: currentReport.ReportId, owner_cd: currentReport.OwnerCd,
+                    reason: reason, comment: document.getElementById("rejectReasonText").value,
+                    status: "20"
+                })
+            });
+            if ((await res.json()).success) {
+                alert("否認しました。");
+                backToIndex();
+            }
+        });
+
+        document.getElementById("backBtn").addEventListener("click", backToIndex);
+        document.addEventListener("DOMContentLoaded", main);
+    </script>
+</body>
+
+</html>
