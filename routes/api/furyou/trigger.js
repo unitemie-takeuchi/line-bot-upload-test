@@ -3,9 +3,15 @@
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
+const { Client } = require('@line/bot-sdk');
 
 const state = require("../../../state-manager");
 const processFuryouReports = require("../../../process-furyou");
+
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+});
 
 const LOG_FILE = "C:/Line-Bot-Upload/line-bot-upload-test/logs/furyou-trigger.log";
 
@@ -35,11 +41,21 @@ router.post("/", async (req, res) => {
 
   // 処理開始
   state.setProcessing(true);
-  fs.appendFileSync(LOG_FILE, "Process start requested.\n");
 
   processFuryouReports()
+    .then(async () => {
+      // ✅ ここで「緊急メッセージ」と同じ仕組みを使って通知！
+      await client.broadcast({
+        type: 'text',
+        text: `📢 不良報告書の準備完了のお知らせ
+
+マックスバリュの不良報告書の準備ができました！
+LINE画面より決裁処理をお願いします。`
+      });
+      fs.appendFileSync(LOG_FILE, "LINE Broadcast sent successfully.\n");
+    })
     .catch(err => {
-      console.error(err);
+      fs.appendFileSync(LOG_FILE, `❌ Error: ${err.message}\n`);
     })
     .finally(() => {
       state.setProcessing(false);

@@ -129,9 +129,21 @@
         const userId = profile.userId;
 
         const params = new URLSearchParams(window.location.search);
-        const ownerCd = params.get("owner_cd");
-        if (!ownerCd) throw new Error("担当者コードが見つかりません。");
+        let ownerCd = params.get("owner_cd");
 
+        // 🌟 URLに担当者コードがない場合、DB(TempLiffData)に聞きに行く！
+        if (!ownerCd) {
+          const liffRes = await fetch(`https://test.unitemie.com/api/get-report?userId=${userId}`);
+          if (liffRes.ok) {
+            const liffData = await liffRes.json();
+            ownerCd = liffData.OwnerCd;
+          }
+        }
+
+        // それでも取れなければエラー
+        if (!ownerCd) throw new Error("担当者コードが見つかりません。LINEから開き直してください。");
+
+        // あとは、この ownerCd を使って一覧を取得するだけ！
         const res = await fetch(`https://test.unitemie.com/api/furyou/list?owner_cd=${ownerCd}`);
         if (!res.ok) throw new Error("データの取得に失敗しました");
         const reports = await res.json();
@@ -146,12 +158,14 @@
         }
 
         reports.forEach((rep) => {
-          if (!ownerLabel) ownerLabel = `${rep.ownerCd} ${rep.ownerName}`;
+          console.log("★サーバーから届いた生データ:", rep);
+          if (!ownerLabel && rep.ownerName) ownerLabel = `${rep.ownerCd} ${rep.ownerName}`;
 
           let statusTxt = "";
           let badgeClass = "";
           let isDone = true;
 
+          // ステータス判定（ここは今のままで完璧！）
           if (rep.status === "10") {
             statusTxt = "✅ 承認済"; badgeClass = "status-10";
           } else if (rep.status === "11") {
@@ -167,22 +181,29 @@
           div.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div style="flex: 1;">
-                <div class="line1">[${rep.seq}] ${rep.title}</div>
-                <div class="line2">${rep.ownerCd} ${rep.ownerName}</div>
+                <div class="line1">
+                  ${rep.productName} 
+                  <span style="font-size: 0.8em; color: #d32f2f; margin-left: 5px;">
+                    ${rep.returnReason ? `(${rep.returnReason})` : ''}
+                  </span>
+                </div>
+                <div class="line2">
+                  店舗: ${rep.shopName}<br>
+                  納品日: ${rep.deliveryDate}
+                </div>
               </div>
               <div class="badge ${badgeClass}">${statusTxt}</div>
             </div>
           `;
-
           div.addEventListener("click", async () => {
             try {
               await fetch(`https://test.unitemie.com/api/save-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  userId: userId, reportId: rep.id,
-                  ownerCd: rep.ownerCd, ownerName: rep.ownerName,
-                  pdfFileName: rep.fileName
+                  userId: userId,
+                  reportId: rep.id,
+                  pdfFileName: rep.fileName // 次の詳細画面でPDFを開くために必要
                 })
               });
               window.location.href = `https://liff.line.me/2007688662-oEf8sKgj?reportId=${rep.id}&v=${Date.now()}`;

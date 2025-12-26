@@ -50,9 +50,17 @@ async function handleEmployeeSelect(userId, employeeCode, replyToken) {
   // ▼ 報告書種類を取得
   const reportList = await reportLoader.getReportsByMode("報告書");
 
-  // ▼ 種類カルーセル
-  const typeCarousel = createReportCarousel(reportList, 0);
+  // 🌟 ここが「落ちないための防護策」！
+  if (!reportList || reportList.length === 0) {
+    logger.warn(`[MV報告書] 選択できる報告書の種類がDBにありませんでした。`);
+    return replyMessage.sendText(
+      replyToken,
+      "【お知らせ】\n該当する報告書はありません。"
+    );
+  }
 
+  // データがある時だけカルーセルを作るから、もう400エラーは出ないよ！
+  const typeCarousel = createReportCarousel(reportList, 0);
   return replyMessage.sendCarousel(replyToken, typeCarousel);
 }
 // --------------------------------------------------
@@ -68,7 +76,7 @@ async function handleReportTypeSelect(userId, reportType, replyToken) {
   const liffUrl =
     `https://liff.line.me/${LIFF_ID}` +
     `?owner_cd=${employeeCode}&emp=${encodeURIComponent(employeeCode)}`;
-  console.log("LIFF URL =", liffUrl);  
+  console.log("LIFF URL =", liffUrl);
   return replyMessage.sendText(
     replyToken,
     `担当者：${employeeCode}\n報告書：${reportType}\n\n承認・否認処理をお願いします：\n${liffUrl}`

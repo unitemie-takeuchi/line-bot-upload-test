@@ -5,6 +5,10 @@ const { notifyAdmin } = require('./utils/lineNotify');
 const mvReportHandler = require("./handlers/mvReportHandler");
 const { getEmployeeList, getSelectedEmployeeCode } = require('./utils/employeeLoader');
 const { createMVEmployeeCarousel } = require('./utils/carouselBuilder');
+const cron = require('node-cron');
+const nodemailer = require('nodemailer');
+const { generateReportPDF } = require('./utils/pdfGenerator');
+const dailyCleanup = require('./cleanup-furyou');
 
 // ✅ .env 存在チェック（任意だけど有効）
 if (!fs.existsSync('.env')) {
@@ -65,98 +69,22 @@ const { router: shortlinkRouter, storeShortLink } = require('./utils/shortlinkCo
 
 app.use('/', shortlinkRouter);
 app.use('/api/furyou', require('./routes/api/furyou'));
+app.use('/api', require('./routes/api/furyou/liffData'));
 
-// --- 【ここから追加】LIFFデータ一時保存用のAPI ---
-const sql = require('mssql'); // すでに他で使っている場合は const は不要だよ
-const dbConfig = require('./config/dbConfig'); // 既存の設定ファイルを利用
+// --- データベースとメールの設定 ---
+const sql = require('mssql');
+const dbConfig = require('./config/dbConfig');
 
-// 1. レポート情報の一時保存 (POST)
-app.post('/api/save-report', async (req, res) => {
-  try {
-    const { userId, reportId, ownerCd, ownerName, pdfFileName } = req.body;
-    if (!userId) return res.status(400).send('userId is required');
-
-    let pool = await sql.connect(dbConfig);
-    await pool.request()
-      .input('userId', sql.NVarChar, userId)
-      .input('reportId', sql.Int, reportId)
-      .input('ownerCd', sql.NVarChar, ownerCd)
-      .input('ownerName', sql.NVarChar, ownerName)
-      .input('pdfFileName', sql.NVarChar, pdfFileName)
-      .query(`
-                MERGE INTO TempLiffData AS target
-                USING (SELECT @userId AS UserId) AS source
-                ON (target.UserId = source.UserId)
-                WHEN MATCHED THEN
-                    UPDATE SET ReportId = @reportId, OwnerCd = @ownerCd, 
-                               OwnerName = @ownerName, PdfFileName = @pdfFileName, UpdatedAt = GETDATE()
-                WHEN NOT MATCHED THEN
-                    INSERT (UserId, ReportId, OwnerCd, OwnerName, PdfFileName)
-                    VALUES (@userId, @reportId, @ownerCd, @ownerName, @pdfFileName);
-            `);
-    res.json({ status: 'success' });
-  } catch (err) {
-    console.error('[ERROR] /api/save-report:', err);
-    res.status(500).send('Server Error');
-  }
-});
-
-// 2. レポート情報の取得 (GET)
-app.get('/api/get-report', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).send('userId is required');
-
-    let pool = await sql.connect(dbConfig);
-    let result = await pool.request()
-      .input('userId', sql.NVarChar, userId)
-      .query('SELECT * FROM TempLiffData WHERE UserId = @userId');
-
-    if (result.recordset.length > 0) {
-      res.json(result.recordset[0]);
-    } else {
-      res.status(404).send('Data not found');
-    }
-  } catch (err) {
-    console.error('[ERROR] /api/get-report:', err);
-    res.status(500).send('Server Error');
-  }
-});
-
-// 3. レポートIDを指定して詳細情報を取得 (GET)
-app.get('/api/get-report-detail', async (req, res) => {
-  try {
-    const reportId = req.query.reportId;
-    if (!reportId) return res.status(400).send('reportId is required');
-
-    let pool = await sql.connect(dbConfig);
-    let result = await pool.request()
-      .input('reportId', sql.Int, reportId)
-      .query('SELECT * FROM dbo.T_MV不良報告書 WHERE id = @reportId'); // id に修正済み！
-
-    if (result.recordset.length > 0) {
-      const data = result.recordset[0];
-      const fileName = data.pdf_file_name || "";
-
-      // 【復活！】ファイル名から名前を抜き出すロジック
-      const nameParts = fileName.split('_');
-      // 形式：担当者CD_レポート名称_担当者名.pdf なので 3番目(index 2)
-      let rawName = nameParts.length > 2 ? nameParts[2] : "（名前なし）";
-      const finalName = rawName.replace(/\.pdf$/i, ""); // .pdf を消す
-
-      const responseData = {
-        ReportId: data.id,
-        OwnerCd: data.owner_cd,
-        OwnerName: finalName, // 切り出した名前をセット！
-        PdfFileName: data.pdf_file_name
-      };
-      res.json(responseData);
-    } else {
-      res.status(404).send('Report not found');
-    }
-  } catch (err) {
-    console.error('[ERROR] /api/get-report-detail:', err);
-    res.status(500).send('Server Error');
+const transporter = nodemailer.createTransport({
+  host: 'sv302.sixcore.ne.jp',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -345,6 +273,93 @@ async function handleMessage(event) {
 
 // ✅ 環境チェッククリア後 → 起動開始
 const port = parseInt(process.env.PORT, 10);
+
+// --- 🕒 11時のバッチ処理を「関数」として定義 ---
+const dailyProcess = async () => {
+  console.log('--- 11時の締め処理（自動承認＆レポート送信）を開始します ---');
+  try {
+    let pool = await sql.connect(dbConfig);
+
+    // 1. 【自動承認】まだ何もしていない(00)データを自動承認(11)にする
+    // ✅ report_flg はまだ 0 のままだよ（この後のPDFに載せるため）
+    const autoApprove = await pool.request().query(`
+      UPDATE dbo.T_MV不良報告書
+      SET 
+        status = '11', 
+        processed_dt = GETDATE(),
+        reject_reason = NULL 
+      WHERE (status = '00' OR status IS NULL OR status = '')
+        AND (report_flg = 0 OR report_flg IS NULL)
+    `);
+    console.log(`✅ 自動承認完了: ${autoApprove.rowsAffected} 件を更新しました。`);
+
+    // 2. 【PDF用データ取得】
+    const result = await pool.request().query(`
+      SELECT 
+        id,
+        shop_cd,          -- 🌟追加
+        shop_name,        -- 🌟追加
+        delivery_date,    -- 🌟追加
+        slip_no,          -- 🌟追加
+        product_cd,       -- 🌟追加
+        origin_name,      -- 🌟産地を追加
+        product_name,     -- 🌟追加
+        return_qty,       -- 🌟念のため数量も
+        status, 
+        reject_reason,
+        reject_comment,
+        processed_dt
+      FROM dbo.T_MV不良報告書 
+      WHERE (report_flg = 0 OR report_flg IS NULL)
+        AND status IN ('10', '11', '20')
+      ORDER BY product_cd ASC, slip_no ASC
+    `);
+
+    const rows = result.recordset;
+    if (rows.length === 0) {
+      console.log('ℹ 報告対象のデータがないため、メール送信をスキップします。');
+      return;
+    }
+
+    // 3. 【PDF作成】
+    const pdfBuffer = await generateReportPDF(rows);
+
+    // 4. 【メール送信】
+    await transporter.sendMail({
+      from: `"不良報告自動配信" <${process.env.MAIL_USER}>`,
+      to: process.env.MAIL_TO,
+      subject: `【自動配信】不良報告 処理結果一覧（${new Date().toLocaleDateString()}）`,
+      text: '本日の処理結果レポートを送付します。確認をお願いします。',
+      attachments: [{
+        filename: `DailyReport_${new Date().toISOString().slice(0, 10)}.pdf`,
+        content: pdfBuffer
+      }]
+    });
+    console.log('✅ 定期PDFメールを送信しました！');
+
+    // 🚀 5. 【重要：事後処理】報告済みに更新！
+    // PDFに載せたデータを一括で report_flg = 1 にするよ
+    const finalize = await pool.request().query(`
+      UPDATE dbo.T_MV不良報告書
+      SET report_flg = 1
+      WHERE (report_flg = 0 OR report_flg IS NULL) -- 🌟ここもカッコを追加！
+        AND status IN ('10', '11', '20')
+    `);
+    console.log(`🧹 事後処理完了: ${finalize.rowsAffected} 件を報告済み(1)に更新しました。`);
+
+  } catch (err) {
+    console.error('❌ バッチ処理でエラーが発生しました:', err);
+  }
+};
+
+// 🕒 cronからは定義した関数を呼ぶようにする
+cron.schedule('0 11 * * *', dailyProcess);
+
+// 🚀 13時のスケジュールを追加
+cron.schedule('0 13 * * *', () => {
+  dailyCleanup(); // 部品を呼び出す！
+});
+
 app.listen(port, (err) => {
   if (err) {
     const msg = `❌ PORT=${port} でLINE Bot起動に失敗しました。\n${err.message}`;
