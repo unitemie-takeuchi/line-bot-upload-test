@@ -44,20 +44,32 @@ router.post("/", async (req, res) => {
 
   processFuryouReports()
     .then(async () => {
-      // ✅ ここで「緊急メッセージ」と同じ仕組みを使って通知！
-      await client.broadcast({
-        type: 'text',
-        text: `📢 不良報告書の準備完了のお知らせ
+      // 🌟 【本番移行後の確認用】この3人にだけ通知を送る
+      const testTargetIds = [
+        "U29c7b04b8084561da3d7100355e4395c",
+        "Ud777cf0b667686e2885275dcdd549e72",
+        "U94eae9f3e274fe2e0b399158edde6892"
+      ];
+
+      // broadcastのかわりに、一人ずつに送る(pushMessage)
+      for (const userId of testTargetIds) {
+        try {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: `📢 不良報告書の準備完了のお知らせ
 
 マックスバリュの不良報告書の準備ができました！
 LINE画面より決裁処理をお願いします。`
-      });
-      fs.appendFileSync(LOG_FILE, "LINE Broadcast sent successfully.\n");
+          });
+          fs.appendFileSync(LOG_FILE, `[SUCCESS] Sent to ${userId}\n`);
+        } catch (err) {
+          fs.appendFileSync(LOG_FILE, `[FAILED] Sent to ${userId}: ${err.message}\n`);
+        }
+      }
+
+      fs.appendFileSync(LOG_FILE, "LINE Test-Notification completed.\n");
     })
     .catch(err => {
-      fs.appendFileSync(LOG_FILE, `❌ Error: ${err.message}\n`);
-    })
-    .finally(() => {
       state.setProcessing(false);
     });
 
