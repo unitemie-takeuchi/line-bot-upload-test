@@ -194,12 +194,12 @@
                 const reportIdFromUrl = params.get("reportId");
                 if (!reportIdFromUrl) throw new Error("レポートID不明");
 
-                const res = await fetch(`https://test.unitemie.com/api/get-report-detail?reportId=${reportIdFromUrl}`);
+                const res = await fetch(`/api/get-report-detail?reportId=${reportIdFromUrl}`);
                 if (!res.ok) throw new Error("データ取得失敗");
                 currentReport = await res.json();
 
                 const pngFileName = currentReport.PdfFileName ? currentReport.PdfFileName.replace(/\.pdf$/i, ".png") : "";
-                document.getElementById("pngImage").src = `https://test.unitemie.com/api/furyou/png?file=${encodeURIComponent(pngFileName)}`;
+                document.getElementById("pngImage").src = `/api/furyou/png?file=${encodeURIComponent(pngFileName)}`;
 
                 document.querySelectorAll(".action-row button").forEach(btn => btn.disabled = false);
             } catch (e) {
@@ -209,7 +209,7 @@
 
         // ボタンのイベント
         document.getElementById("approveBtn").addEventListener("click", async () => {
-            const res = await fetch(`https://test.unitemie.com/api/furyou/approve`, {
+            const res = await fetch(`/api/furyou/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: currentReport.ReportId, owner_cd: currentReport.OwnerCd, status: "10" })
@@ -247,7 +247,7 @@
             // モーダルを消してから通信
             document.getElementById("rejectModal").classList.add("hidden");
 
-            const res = await fetch(`https://test.unitemie.com/api/furyou/reject`, {
+            const res = await fetch(`/api/furyou/reject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

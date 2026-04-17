@@ -4,11 +4,12 @@ const fs = require('fs');
 const { notifyAdmin } = require('./utils/lineNotify');
 const mvReportHandler = require("./handlers/mvReportHandler");
 const { getEmployeeList, getSelectedEmployeeCode } = require('./utils/employeeLoader');
-const { createMVEmployeeCarousel } = require('./utils/carouselBuilder');
+const { createMVEmployeeCarousel, createListSelectCarousel } = require('./utils/carouselBuilder');
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 const { generateReportPDF } = require('./utils/pdfGenerator');
 const dailyCleanup = require('./cleanup-furyou');
+const orderListRouter = require('./routes/api/lists/orderList');
 
 // ✅ .env 存在チェック（任意だけど有効）
 if (!fs.existsSync('.env')) {
@@ -56,8 +57,8 @@ const path = require('path');
 // 静的ファイル
 app.use(express.static(path.join(__dirname, 'public')));
 // API 用だけ JSON を有効化
-app.use('/api', express.json());
-app.use('/api', express.urlencoded({ extended: true }));
+app.use('/api', express.json({ limit: '50mb' }));
+app.use('/api', express.urlencoded({ limit: '50mb', extended: true }));
 const client = new line.Client(config);
 const sessionManager = require('./utils/sessionManager');
 const reportHandler = require('./handlers/reportHandler');
@@ -70,6 +71,8 @@ const { router: shortlinkRouter, storeShortLink } = require('./utils/shortlinkCo
 app.use('/', shortlinkRouter);
 app.use('/api/furyou', require('./routes/api/furyou'));
 app.use('/api', require('./routes/api/furyou/liffData'));
+app.use('/api/lists', orderListRouter);
+app.use('/view-pdf', require('./routes/api/lists/pdfViewer'));
 
 // --- データベースとメールの設定 ---
 const sql = require('mssql');
@@ -183,6 +186,12 @@ async function handleMessage(event) {
     } else {
       return await handleSelectedReportName(userId, text, replyToken);
     }
+  }
+
+  if (text === "データ抽出") {
+    sessionManager.clear(userId);
+    const carousel = createListSelectCarousel();
+    return await client.replyMessage(replyToken, carousel);
   }
 
   // 🟢 次へ社員
@@ -353,21 +362,66 @@ const dailyProcess = async () => {
 };
 
 // 🕒 cronからは定義した関数を呼ぶようにする
-cron.schedule('0 11 * * *', dailyProcess);
+//cron.schedule('0 11 * * *', dailyProcess);
 
 // 🚀 13時のスケジュールを追加
-cron.schedule('0 13 * * *', () => {
-  dailyCleanup(); // 部品を呼び出す！
-});
+//cron.schedule('0 13 * * *', () => {
+//  dailyCleanup(); // 部品を呼び出す！
+//});
 
-app.listen(port, (err) => {
-  if (err) {
-    const msg = `❌ PORT=${port} でLINE Bot起動に失敗しました。\n${err.message}`;
-    console.error(msg);
-    notifyAdmin(msg).then(() => process.exit(1));
-  } else {
-    const msg = `👑 LINE Bot Kingdom が起動しました。\nhttp://localhost:${port}`;
-    logger.info(msg);
-    notifyAdmin(msg);
+// --- main.js の一番下、app.listen 部分を以下に書き換え ---
+
+/**
+ * 🚀 データベース接続とサーバー起動を管理する関数
+ * DBが繋がるまで粘り、繋がってから初めてサーバーを公開＆通知するよ！
+ */
+const startServer = async () => {
+  const maxRetries = 10;    // 最大10回リトライ
+  const retryInterval = 10000; // 10秒おきにチャレンジ
+  let attempts = 0;
+  let connected = false;
+
+  console.log('🚀 データベース接続チェックを開始します...');
+
+  while (!connected && attempts < maxRetries) {
+    try {
+      attempts++;
+      // ここで一度、DBに接続できるか試してみる
+      await sql.connect(dbConfig);
+      console.log('✅ データベース（ミエデンDC）に繋がったよ！');
+      connected = true;
+    } catch (err) {
+      console.error(`❌ DB接続失敗 (${attempts}/${maxRetries}): ${err.message}`);
+      
+      if (attempts >= maxRetries) {
+        // 10回ダメだった時だけ、最後に「諦めました」の通知を送る
+        const errorMsg = `❌ 【重大】DBに${maxRetries}回接続できず、起動を断念しました。VPSの状態を確認してください。`;
+        logger.error(errorMsg);
+        await notifyAdmin(errorMsg);
+        process.exit(1); // ここで初めて終了
+      }
+
+      // まだ回数があるなら、通知は送らずに「静かに」待機する
+      console.log(`${retryInterval / 1000}秒後に再試行するね...`);
+      await new Promise(res => setTimeout(res, retryInterval));
+    }
   }
-});
+
+  // ーーー ここから下は、DBが繋がった後にだけ実行されるよ ーーー
+
+  app.listen(port, (err) => {
+    if (err) {
+      const msg = `❌ PORT=${port} でサーバー起動に失敗しました。\n${err.message}`;
+      logger.error(msg);
+      notifyAdmin(msg).then(() => process.exit(1));
+    } else {
+      // ✅ ここで送る通知が「最初で最後の1回」になる！
+      const msg = `👑 LINE Bot Kingdom が正常に起動しました。\n（データベース接続も確認済みだよ！）`;
+      logger.info(msg);
+      notifyAdmin(msg); 
+    }
+  });
+};
+
+// 運命の実行！
+startServer();

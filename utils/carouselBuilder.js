@@ -158,9 +158,35 @@ function createReportCarousel(reports, page = 0) {
   };
 }
 
+/**
+ * 帳票選択パネル（1枚だけにするよ！）
+ */
+function createListSelectCarousel() {
+  const liffUrl = "https://liff.line.me/2007688662-pvBRmKxR";
+
+  return {
+    type: "template",
+    altText: "データ抽出を開始します",
+    template: {
+      type: "buttons", // カルーセルじゃなくて「ボタン」形式
+      title: "データ抽出・確認",
+      text: "受注・売上・仕入を確認できます",
+      actions: [
+        { 
+          type: "uri", 
+          label: "データ抽出を開く", 
+          // 最初は「受注(order)」で開くように設定しておく
+          uri: `${liffUrl}?mode=order` 
+        }
+      ]
+    }
+  };
+}
+
 module.exports = {
   createEmployeeCarousel,
   createTitleCarousel,
   createReportCarousel,
-  createMVEmployeeCarousel
+  createMVEmployeeCarousel,
+  createListSelectCarousel
 };

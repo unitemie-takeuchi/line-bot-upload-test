@@ -43,7 +43,6 @@ async function processFuryouReports() {
             SELECT COUNT(*) AS cnt
             FROM dbo.T_MV不良報告書
             WHERE CAST(import_dt AS DATE) = CAST(GETDATE() AS DATE)
-              AND status = '00'
         `);
 
         const dbCount = dbResult.recordset[0].cnt;

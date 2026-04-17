@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <title>受注リスト確認</title>
+    <style>
+        /* タブ全体のコンテナ */
+        .mode-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 基本のボタン設定 */
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            /* 少し丸みを強くして可愛く */
+            background: #e0e0e0;
+            font-weight: bold;
+            color: #777;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            /* 🌟ぽよんの魔法 */
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* 🌟 押した瞬間にちょっと小さくなる（ぽよんの準備） */
+        .tab-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* 🌟 アクティブ時の色分け（モードごとに変える） */
+
+        /* 受注が選ばれているとき */
+        #tab-order.active {
+            background: #007bff;
+            /* 青 */
+            color: white;
+            transform: scale(1.05);
+            /* 選ばれてるやつを少し大きく */
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+        }
+
+        /* 売上が選ばれているとき */
+        #tab-sales.active {
+            background: #28a745;
+            /* 緑 */
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+        }
+
+        /* 仕入が選ばれているとき */
+        #tab-purchase.active {
+            background: #d9534f;
+            /* 赤 */
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(217, 83, 79, 0.3);
+        }
+    </style>
+
+    <style>
+        /* --- 全体の見た目設定 --- */
+        body {
+            font-family: sans-serif;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        select,
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        .filter-box {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .btn-update {
+            width: 100%;
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* --- 明細カードの見た目 --- */
+        .item {
+            background: white;
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* --- 浮かせるボタンの魔法（ここが追加した部分！） --- */
+        .floating-btn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 65px;
+            height: 65px;
+            background-color: #d9534f;
+            color: white;
+            border-radius: 50%;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 28px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .floating-btn:active {
+            transform: scale(0.85);
+            background-color: #c9302c;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mode-tabs">
+        <button id="tab-order" class="tab-btn" onclick="switchMode('order')">受注</button>
+        <button id="tab-sales" class="tab-btn" onclick="switchMode('sales')">売上</button>
+        <button id="tab-purchase" class="tab-btn" onclick="switchMode('purchase')">仕入</button>
+    </div>
+    <button class="floating-btn" onclick="generatePDF()">📄</button>
+    <h3 id="mainTitle" style="display:none;">データ抽出</h3>
+
+    <div class="filter-box">
+        <label>納品期間を選択（最大31日間）：</label>
+        <div style="display: flex; gap: 5px; align-items: center; margin-bottom: 10px;">
+            <input type="date" id="startDate" style="margin-bottom: 0;" onchange="syncDates()">
+            <span>～</span>
+            <input type="date" id="endDate" style="margin-bottom: 0;" onchange="checkDateRange()">
+        </div>
+        <button class="btn-update" onclick="loadData()">表示更新</button>
+        <div style="margin-top: 10px; font-size: 0.9em; color: #666; font-weight: bold;">
+            現在の対象：<span id="dataCount">0</span> 件
+        </div>
+    </div>
+
+    <label>得意先で絞り込む：</label>
+    <select id="customerSelect">
+        <option value="">すべて表示</option>
+    </select>
+
+    <label>担当者で絞り込む：</label>
+    <select id="staffSelect">
+        <option value="">すべて表示</option>
+    </select>
+
+    <label>商品名で絞り込む：</label>
+    <select id="productSelect">
+        <option value="">すべて表示</option>
+    </select>
+
+    <hr>
+
+    <div id="listContainer">データ読み込み中...</div>
+
+    <script>
+        let allData = [];
+        let currentFilteredData = [];
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentMode = urlParams.get('mode') || 'order';
+
+        const modeSettings = {
+            order: { title: '受注一覧', api: 'https://test.unitemie.com/api/lists/get-order-data', mode: 'order' },
+            sales: { title: '売上一覧', api: 'https://test.unitemie.com/api/lists/get-order-data', mode: 'sales' },
+            purchase: { title: '仕入一覧', api: 'https://test.unitemie.com/api/lists/get-order-data', mode: 'purchase' }
+        };
+
+        window.onload = function () {
+            document.getElementById('mainTitle').innerText = modeSettings[currentMode].title;
+            document.title = modeSettings[currentMode].title;
+
+            liff.init({
+                liffId: "2007688662-pvBRmKxR"
+            }).then(() => {
+                console.log("LIFF初期化成功！");
+                document.getElementById(`tab-${currentMode}`).classList.add('active');
+                loadData();
+            }).catch((err) => {
+                console.error("LIFF初期化失敗", err);
+            });
+        };
+
+        const now = new Date();
+        const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        document.getElementById('startDate').value = today;
+        document.getElementById('endDate').value = today;
+
+        // --- 日付操作関数 ---
+        function syncDates() {
+            const startInput = document.getElementById('startDate');
+            const endInput = document.getElementById('endDate');
+            if (!startInput.value) return;
+            const start = new Date(startInput.value);
+            if (endInput.value) {
+                const end = new Date(endInput.value);
+                if (start > end) endInput.value = startInput.value;
+                else if (Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1 > 31) adjustToMax(start, endInput);
+            } else {
+                endInput.value = startInput.value;
+            }
+        }
+
+        function checkDateRange() {
+            const startInput = document.getElementById('startDate');
+            const endInput = document.getElementById('endDate');
+            if (!startInput.value || !endInput.value) return;
+            const start = new Date(startInput.value);
+            const end = new Date(endInput.value);
+            if (end < start) {
+                startInput.value = endInput.value;
+                syncDates();
+                return;
+            }
+            if (Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1 > 31) adjustToMax(start, endInput);
+        }
+
+        function adjustToMax(startDateObj, endInputEl) {
+            const maxEnd = new Date(startDateObj);
+            maxEnd.setDate(startDateObj.getDate() + 30);
+            const y = maxEnd.getFullYear();
+            const m = String(maxEnd.getMonth() + 1).padStart(2, '0');
+            const d = String(maxEnd.getDate()).padStart(2, '0');
+            alert(`最大31日分までです。終了日を ${y}/${m}/${d} にしました。`);
+            endInputEl.value = `${y}-${m}-${d}`;
+        }
+
+        // --- データの取得 ---
+        async function loadData() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const container = document.getElementById('listContainer');
+            container.textContent = "読み込み中...";
+
+            try {
+                const settings = modeSettings[currentMode];
+                const apiUrl = `${settings.api}?start=${start}&end=${end}&mode=${settings.mode}`;
+                const response = await fetch(apiUrl);
+
+                if (!response.ok) {
+                    container.textContent = `エラー: ${response.status}`;
+                    return;
+                }
+
+                const rawData = await response.json();
+
+                allData = rawData.map(d => ({
+                    ...d,
+                    日付: (d.日付 || "").toString().replace(/-/g, ""),
+                    取引先名: d.取引先名 || d.得意先略名 || "不明",
+                    取引先コード: d.取引先コード || d.得意先コード || "0000"
+                }));
+
+                // 🌟 この順番で、かつ「記憶」を直接渡すように変更！
+                const saved = restoreSavedFilters();
+                refreshAllSelects(saved); // 記憶を渡して中身を作る
+                applyFilters();
+
+            } catch (err) {
+                console.error("loadDataエラー:", err.message);
+                container.textContent = "エラーが発生したよ";
+            }
+        }
+
+        // 🌟 モード切り替え
+        async function switchMode(newMode) {
+            if (currentMode === newMode) return;
+            currentMode = newMode;
+
+            document.getElementById('mainTitle').innerText = modeSettings[currentMode].title;
+            document.title = modeSettings[currentMode].title;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${newMode}`).classList.add('active');
+
+            // モードが変わった時も、今の選択肢を維持したままデータを読み直す
+            await loadData();
+        }
+
+        // 🌟 記憶を呼び出す専用の関数
+        function restoreSavedFilters() {
+            const prefix = (currentMode === 'purchase') ? 'pur_' : 'sls_';
+            const saved = {
+                staff: localStorage.getItem(prefix + 'savedStaff') || "",
+                customer: localStorage.getItem(prefix + 'savedCustomer') || "",
+                product: localStorage.getItem(prefix + 'savedProduct') || ""
+            };
+            return saved;
+        }
+
+        function refreshAllSelects(saved = null) {
+            // 記憶があればそれを使う、なければ今のセレクトボックスの値を使う
+            const sStaff = saved ? saved.staff : document.getElementById('staffSelect').value;
+            const sCust = saved ? saved.customer : document.getElementById('customerSelect').value;
+            const sProd = saved ? saved.product : document.getElementById('productSelect').value;
+
+            // ここで連動した選択肢を作る
+            updateSelect('staffSelect', allData.filter(d => (!sCust || d.取引先コード === sCust) && (!sProd || d.商品コード === sProd)), '担当コード', '担当者名', '担当コード', sStaff);
+            updateSelect('customerSelect', allData.filter(d => (!sStaff || d.担当コード === sStaff) && (!sProd || d.商品コード === sProd)), '取引先コード', '取引先名', '取引先コード', sCust);
+            updateSelect('productSelect', allData.filter(d => (!sStaff || d.担当コード === sStaff) && (!sCust || d.取引先コード === sCust)), '商品コード', '商品正式名', '商品コード', sProd);
+        }
+
+        function updateSelect(elementId, data, codeField, displayField, valueField, currentValue) {
+            const select = document.getElementById(elementId);
+            const uniqueMap = new Map();
+            data.forEach(item => {
+                if (item[codeField] && !uniqueMap.has(item[codeField])) {
+                    uniqueMap.set(item[codeField], { display: item[displayField], val: item[valueField] });
+                }
+            });
+            const sorted = Array.from(uniqueMap.entries()).sort((a, b) => (a[0] || "").toString().localeCompare((b[0] || "").toString()));
+
+            select.innerHTML = '<option value="">すべて表示</option>';
+            sorted.forEach(([code, obj]) => {
+                const opt = document.createElement('option');
+                opt.value = obj.val;
+                opt.textContent = `${code}：${obj.display}`;
+                if (obj.val === currentValue) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const staff = document.getElementById('staffSelect').value;
+            const customer = document.getElementById('customerSelect').value;
+            const product = document.getElementById('productSelect').value;
+
+            currentFilteredData = allData.filter(d => {
+                return (!staff || d.担当コード === staff) &&
+                    (!customer || d.取引先コード === customer) &&
+                    (!product || d.商品コード === product);
+            });
+
+            renderList(currentFilteredData);
+
+            // 🌟 選択された値を保存する
+            const prefix = (currentMode === 'purchase') ? 'pur_' : 'sls_';
+            localStorage.setItem(prefix + 'savedStaff', staff);
+            localStorage.setItem(prefix + 'savedCustomer', customer);
+            localStorage.setItem(prefix + 'savedProduct', product);
+        }
+
+        function renderList(data) {
+            const container = document.getElementById('listContainer');
+            document.getElementById('dataCount').textContent = data.length;
+            if (data.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding:20px; color:#999;">データが見つかりません</div>`;
+                return;
+            }
+            const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
+
+            container.innerHTML = data.map((item, index) => {
+                const y = item.日付.substring(0, 4);
+                const m = item.日付.substring(4, 6);
+                const d = item.日付.substring(6, 8);
+                const dateObj = new Date(`${y}-${m}-${d}`);
+                const dayStr = dayOfWeek[dateObj.getDay()];
+                const formattedDate = `${y}/${m}/${d}(${dayStr})`;
+                const memoHtml = item.摘要 ? `<div style="font-size:0.85em; color:#555; background:#f0f0f0; padding:4px 8px; border-radius:4px; margin-top:4px;">${item.摘要}</div>` : '';
+
+                return `
+            <div class="item" onclick="showDetail(${index})" style="cursor:pointer; -webkit-tap-highlight-color:rgba(0,0,0,0.1);">
+                <div style="font-size: 0.8em; color: #007bff; font-weight: bold; margin-bottom: 4px;">📅 ${formattedDate}</div>
+                <div style="font-size: 0.95em; color: #2c3e50; font-weight: bold; margin-bottom: 6px;">
+                    <span style="color:#888; font-size:0.85em; margin-right:5px;">${item.取引先コード}</span>${item.取引先名}
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #fff9e6; padding: 6px; border-radius: 4px; border: 1px solid #ffeeba;">
+                    <div style="font-size: 1.05em; color: #333; font-weight: bold;">
+                        ${item.商品名} <span style="font-size: 0.85em; color: #666; font-weight: normal;">${item.等級 || ''} ${item.階級 || ''}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 1.2em; color: #d9534f; font-weight: bold;">${item.数量}</span><span style="font-size: 0.8em;">${item.単位名 || ''}</span>
+                    </div>
+                </div>
+                ${memoHtml}
+            </div>`;
+            }).join('');
+        }
+
+        function showDetail(index) {
+            const item = currentFilteredData[index];
+            const body = document.getElementById('modalBody');
+            const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
+            let formattedDate = item.日付 || "";
+            const dateStr = String(formattedDate).replace(/[^0-9]/g, "");
+
+            if (dateStr.length >= 8) {
+                const y = dateStr.substring(0, 4);
+                const m = dateStr.substring(4, 6);
+                const d = dateStr.substring(6, 8);
+                const dateObj = new Date(`${y}-${m}-${d}`);
+                if (!isNaN(dateObj)) {
+                    formattedDate = `${y}/${m}/${d}(${dayOfWeek[dateObj.getDay()]})`;
+                }
+            }
+
+            const k規格 = [item.等級, item.階級].filter(v => v && String(v).trim() !== "").join(" ");
+            const tanka = item.単価 || 0;
+            const su = item.数量 || 0;
+            const kingaku = Math.floor(tanka * su);
+
+            body.innerHTML = `
+            <h3 style="margin-top:0; color:#007bff; border-bottom:2px solid #007bff; padding-bottom:5px;">明細詳細</h3>
+            <table style="width:100%; border-collapse:collapse; font-size:16px;">
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666; width:35%;">日付</td><td style="padding:10px;"><b>${formattedDate}</b></td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">取引先</td><td style="padding:10px;"><b>${item.取引先名}</b><br><small>(${item.取引先コード})</small></td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">商品名</td><td style="padding:10px;"><b>${item.商品名}</b></td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">規格</td><td style="padding:10px;">${k規格 || ' '}</td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">数量</td><td style="padding:10px;"><span style="font-size:1.1em; font-weight:bold;">${su}</span> ${item.単位名 || ''}</td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">単価</td><td style="padding:10px;">￥${tanka.toLocaleString()}</td></tr>
+                <tr style="border-bottom:1px solid #eee; background:#fdf2f2;"><td style="padding:10px; color:#666;">金額(税抜)</td><td style="padding:10px;"><span style="font-size:1.2em; color:#d9534f; font-weight:bold;">￥${kingaku.toLocaleString()}</span></td></tr>
+                <tr style="border-bottom:1px solid #eee;"><td style="padding:10px; color:#666;">摘要</td><td style="padding:10px; background:#fff9e6;">${item.摘要 || ''}</td></tr>
+            </table>
+        `;
+            document.getElementById('detailModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+        async function generatePDF() {
+            if (currentFilteredData.length === 0) {
+                alert("データがないから印刷できないよ！");
+                return;
+            }
+            if (currentFilteredData.length > 1000) {
+                alert(`現在 ${currentFilteredData.length} 件選択されています。\n一度に印刷できるのは 1000件 までだよ！\n条件を絞り込んでみてね。`);
+                return;
+            }
+
+            const btn = document.querySelector('.floating-btn');
+            btn.disabled = true; btn.textContent = "⏳";
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const staffText = document.getElementById('staffSelect').options[document.getElementById('staffSelect').selectedIndex].text;
+                const customerText = document.getElementById('customerSelect').options[document.getElementById('customerSelect').selectedIndex].text;
+                const productText = document.getElementById('productSelect').options[document.getElementById('productSelect').selectedIndex].text;
+
+                const filterConditions = `期間: ${startDate} ～ ${endDate} / 担当: ${staffText} / 取引先: ${customerText} / 商品: ${productText}`;
+
+                const profile = await liff.getProfile();
+                const response = await fetch('https://test.unitemie.com/api/lists/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: currentFilteredData,
+                        userId: profile.userId,
+                        mode: currentMode,
+                        conditions: filterConditions
+                    })
+                });
+                const data = await response.json();
+                const viewerUrl = data.url + "&t=" + new Date().getTime();
+                if (liff.isInClient()) liff.openWindow({ url: viewerUrl, external: true });
+                else window.open(viewerUrl, '_blank');
+            } catch (err) { alert("PDFエラー: " + err.message); }
+            finally { btn.disabled = false; btn.textContent = "📄"; }
+        }
+
+        document.getElementById('staffSelect').onchange = function () {
+            refreshAllSelects(); // まず他のセレクトボックスの選択肢を更新
+            applyFilters();      // そのあとリストを絞り込み＆保存
+        };
+
+        document.getElementById('customerSelect').onchange = function () {
+            refreshAllSelects();
+            applyFilters();
+        };
+
+        document.getElementById('productSelect').onchange = function () {
+            refreshAllSelects();
+            applyFilters();
+        };
+    </script>
+
+    <div id="detailModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;"
+        onclick="closeModal()">
+
+        <div style="background:white; width:90%; max-height:80%; border-radius:15px; padding:20px; overflow-y:auto; position:relative;"
+            onclick="event.stopPropagation()">
+
+            <div style="text-align:right;">
+                <span style="font-size:24px; cursor:pointer;" onclick="closeModal()">×</span>
+            </div>
+
+            <div id="modalBody"></div>
+
+            <button onclick="closeModal()"
+                style="width:100%; margin-top:20px; padding:12px; background:#f0f0f0; border:none; border-radius:8px; font-weight:bold;">閉じる</button>
+        </div>
+    </div>
+
+</body>
+
+</html>

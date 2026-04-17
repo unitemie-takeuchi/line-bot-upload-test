@@ -133,7 +133,7 @@
 
         // 🌟 URLに担当者コードがない場合、DB(TempLiffData)に聞きに行く！
         if (!ownerCd) {
-          const liffRes = await fetch(`https://test.unitemie.com/api/get-report?userId=${userId}`);
+          const liffRes = await fetch(`/api/get-report?userId=${userId}`);
           if (liffRes.ok) {
             const liffData = await liffRes.json();
             ownerCd = liffData.OwnerCd;
@@ -144,7 +144,7 @@
         if (!ownerCd) throw new Error("担当者コードが見つかりません。LINEから開き直してください。");
 
         // あとは、この ownerCd を使って一覧を取得するだけ！
-        const res = await fetch(`https://test.unitemie.com/api/furyou/list?owner_cd=${ownerCd}`);
+        const res = await fetch(`/api/furyou/list?owner_cd=${ownerCd}`);
         if (!res.ok) throw new Error("データの取得に失敗しました");
         const reports = await res.json();
 
@@ -197,7 +197,7 @@
           `;
           div.addEventListener("click", async () => {
             try {
-              await fetch(`https://test.unitemie.com/api/save-report`, {
+              await fetch(`/api/save-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
